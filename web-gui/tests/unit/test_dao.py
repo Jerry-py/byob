@@ -19,7 +19,7 @@ def test_add_user(app_client):
         test_hashed_password = bcrypt.generate_password_hash(test_password).decode('utf-8')
         user = user_dao.add_user(username=test_username, hashed_password=test_hashed_password)
     except Exception as e:
-        pytest.fail("user_dao.add_user returned exception: " + str(e))
+        pytest.fail(f"user_dao.add_user returned exception: {str(e)}")
     assert user.username == test_username
     assert user.password == test_hashed_password
     assert bcrypt.check_password_hash(user.password, test_password)
@@ -73,25 +73,25 @@ def test_handle_session(app_client, new_user):
     # add test session (without uid)
     uid = md5(bytes(getrandbits(10))).hexdigest()
     input_session_dict = {
-			"online": True,
-			"joined": datetime.utcnow(),
-			"last_online": datetime.utcnow(),
-			"public_ip": '1.2.3.4',
-			"local_ip": '192.1.1.168',
-			"mac_address": '00:0A:95:9D:68:16',
-			"username": 'test_user',
-			"administrator": True,
-			"platform": 'linux2',
-			"device": 'test_device',
-			"architecture": 'x32',
-			"latitude": 0.00,
-			"longitude": 0.00,
-			"owner": new_user.username,
+    "online": True,
+    "joined": datetime.utcnow(),
+    "last_online": datetime.utcnow(),
+    "public_ip": '1.2.3.4',
+    "local_ip": '192.1.1.168',
+    "mac_address": '00:0A:95:9D:68:16',
+    "username": 'test_user',
+    "administrator": True,
+    "platform": 'linux2',
+    "device": 'test_device',
+    "architecture": 'x32',
+    "latitude": 0.00,
+    "longitude": 0.00,
+    "owner": new_user.username,
     }
     try:
         output_session_dict = session_dao.handle_session(input_session_dict)
     except Exception as e:
-        pytest.fail("dao.handle_session exception handling new session: " + str(e))
+        pytest.fail(f"dao.handle_session exception handling new session: {str(e)}")
 
     # check server assigned uid
     assert 'uid' in output_session_dict
@@ -118,26 +118,29 @@ def test_handle_session(app_client, new_user):
     # add test session (with uid)
     uid = md5(bytes(getrandbits(10))).hexdigest()
     input_session_dict = {
-			"uid": uid,
-			"online": True,
-			"joined": datetime.utcnow(),
-			"last_online": datetime.utcnow(),
-			"public_ip": '5.6.7.8',
-			"local_ip": '192.1.1.168',
-			"mac_address": '00:0A:95:9D:68:16',
-			"username": 'test_user',
-			"administrator": True,
-			"platform": 'linux2',
-			"device": 'test_device',
-			"architecture": 'x32',
-			"latitude": 0.00,
-			"longitude": 0.00,
-			"owner": new_user.username,
+    "uid": uid,
+    "online": True,
+    "joined": datetime.utcnow(),
+    "last_online": datetime.utcnow(),
+    "public_ip": '5.6.7.8',
+    "local_ip": '192.1.1.168',
+    "mac_address": '00:0A:95:9D:68:16',
+    "username": 'test_user',
+    "administrator": True,
+    "platform": 'linux2',
+    "device": 'test_device',
+    "architecture": 'x32',
+    "latitude": 0.00,
+    "longitude": 0.00,
+    "owner": new_user.username,
     }
     try:
         output_session_dict = session_dao.handle_session(input_session_dict)
     except Exception as e:
-        pytest.fail("dao.handle_session exception handling existing session: " + str(e))
+        pytest.fail(
+            f"dao.handle_session exception handling existing session: {str(e)}"
+        )
+
 
     # run tests
     session = session_dao.get_session(uid)
@@ -166,7 +169,7 @@ def test_delete_session(app_client, new_session):
     try:
         session_dao.delete_session(new_session.uid)
     except Exception as e:
-        pytest.fail("session_dao.delete_session returned an exception: " + str(e))
+        pytest.fail(f"session_dao.delete_session returned an exception: {str(e)}")
     assert session_dao.get_session(new_session.uid) is None
 
 def test_handle_task(app_client, new_session):
@@ -184,12 +187,12 @@ def test_handle_task(app_client, new_session):
     try:
         output_task_dict = task_dao.handle_task(input_task_dict)
     except Exception as e:
-        pytest.fail("dao.handle_task exception handling new task: " + str(e))
+        pytest.fail(f"dao.handle_task exception handling new task: {str(e)}")
 
     # run tests
     tasks = task_dao.get_session_tasks(new_session.uid)
     assert len(tasks) == 1
-    task = task_dao.get_task(output_task_dict['uid'])   
+    task = task_dao.get_task(output_task_dict['uid'])
     assert len(task.uid) == 32
     assert task.session == new_session.uid
     assert task.task == 'whoami'
@@ -213,7 +216,7 @@ def test_handle_completed_task(app_client, new_session):
     try:
         completed_task_dict = task_dao.handle_task(output_task_dict)
     except Exception as e:
-        pytest.fail("dao.handle_task exception handling completed task: " + str(e))
+        pytest.fail(f"dao.handle_task exception handling completed task: {str(e)}")
 
     # run tests
     assert 'uid' in completed_task_dict
@@ -231,7 +234,7 @@ def test_handle_invalid_task(app_client):
     try:
         invalid_task_dict = task_dao.handle_task('invalid task - not a dict')
     except Exception as e:
-        pytest.fail("dao.handle_task exception handling invalid task: " + str(e))
+        pytest.fail(f"dao.handle_task exception handling invalid task: {str(e)}")
     assert isinstance(invalid_task_dict, dict)
     assert 'result' in invalid_task_dict
     assert 'Error' in invalid_task_dict['result']
@@ -244,7 +247,7 @@ def test_update_session_status(app_client, new_session):
     """
     # toggle online/offline status
     prev_status = new_session.online
-    new_status = False if new_session.online else True 
+    new_status = not new_session.online
     session_dao.update_session_status(new_session.uid, new_status)
 
     # check if it was updated correctly
@@ -261,7 +264,7 @@ def test_add_user_payload(app_client, new_user):
     try:
         payload = payload_dao.add_user_payload(new_user.id, 'test.py', 'nix', 'x32')
     except Exception as e:
-        pytest.fail("payload_dao.add_user_payload returned exception: " + str(e))
+        pytest.fail(f"payload_dao.add_user_payload returned exception: {str(e)}")
     assert payload.owner == new_user.username
     assert payload.filename == 'test.py'
     assert payload.operating_system == 'nix'
@@ -282,7 +285,7 @@ def test_get_user_payloads(app_client, new_user):
         new_payload = payload_dao.add_user_payload(new_user.id, 'test.py', 'nix', 'x32')
         payloads = payload_dao.get_user_payloads(new_user.id)
     except Exception as e:
-        pytest.fail("payload_dao.get_user_payloads returned excpetion: " + str(e))
+        pytest.fail(f"payload_dao.get_user_payloads returned excpetion: {str(e)}")
     assert len(payloads) != 0
 
     # cleanup
@@ -298,13 +301,13 @@ def test_add_user_file(app_client, new_user, new_session):
     try:
         test_file = file_dao.add_user_file(new_user.username, 'test.txt', new_session.public_ip, 'test_module')
     except Exception as e:
-        pytest.fail("file_dao.add_user_file returned exception: " + str(e))
+        pytest.fail(f"file_dao.add_user_file returned exception: {str(e)}")
     assert test_file is not None
     assert test_file.owner == new_user.username
     assert test_file.session == new_session.public_ip
     assert test_file.module == 'test_module'
     assert test_file.filename == 'test.txt'
-    
+
     # cleanup
     ExfiltratedFile.query.delete()
     db.session.commit()
@@ -320,9 +323,9 @@ def test_get_user_files(app_client, new_user, new_session):
         test_file = file_dao.add_user_file(new_user.username, 'test.txt', new_session.public_ip, 'test_module')
         files = file_dao.get_user_files(new_user.id)
     except Exception as e:
-        pytest.fail("file_dao.get_user_files returned exception: " + str(e))
+        pytest.fail(f"file_dao.get_user_files returned exception: {str(e)}")
     assert len(files) != 0
-    
+
     # cleanup
     ExfiltratedFile.query.delete()
     db.session.commit()

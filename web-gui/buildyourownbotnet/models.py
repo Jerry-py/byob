@@ -26,7 +26,7 @@ class User(db.Model, UserMixin):
 	files = db.relationship('ExfiltratedFile', backref='creator', lazy=True)
 
 	def __repr__(self):
-		return "User('{}')".format(self.username)
+		return f"User('{self.username}')"
 
 class Session(db.Model):
 	id = db.Column(db.Integer, nullable=False)

@@ -651,14 +651,24 @@ ports = {
 def _ping(host):
     global results
     try:
-        if host not in results:
-            if subprocess.call("ping -{} 1 -W 90 {}".format('n' if os.name == 'nt' else 'c', host), 0, None, subprocess.PIPE, subprocess.PIPE, subprocess.PIPE, shell=True) == 0:
-                results[host] = {}
-                return True
-            else:
-                return False
-        else:
+        if host in results:
             return True
+        if (
+            subprocess.call(
+                f"ping -{'n' if os.name == 'nt' else 'c'} 1 -W 90 {host}",
+                0,
+                None,
+                subprocess.PIPE,
+                subprocess.PIPE,
+                subprocess.PIPE,
+                shell=True,
+            )
+            == 0
+        ):
+            results[host] = {}
+            return True
+        else:
+            return False
     except Exception as e:
         util.log(str(e))
         return False
@@ -697,7 +707,12 @@ def _scan(target):
 
         if data:
             data = ''.join([i for i in data if i in ([chr(n) for n in range(32, 123)])])
-            data = data.splitlines()[0] if '\n' in data else str(data if len(str(data)) <= 80 else data[:77] + '...')
+            data = (
+                data.splitlines()[0]
+                if '\n' in data
+                else str(data if len(data) <= 80 else f'{data[:77]}...')
+            )
+
             item = {str(port) : {'protocol': ports[str(port)]['protocol'], 'service': data, 'state': 'open'}}
         else:
             item = {str(port) : {'protocol': ports[str(port)]['protocol'], 'service': ports[str(port)]['service'], 'state': 'open'}}
@@ -707,7 +722,7 @@ def _scan(target):
     except (socket.error, socket.timeout):
         pass
     except Exception as e:
-        util.log("{} error: {}".format(_scan.__name__, str(e)))
+        util.log(f"{_scan.__name__} error: {str(e)}")
 
 
 def run(target='192.168.1.1', ports=[21,22,23,25,80,110,111,135,139,443,445,554,993,995,1433,1434,3306,3389,8000,8008,8080,8888]):

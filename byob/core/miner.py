@@ -86,7 +86,7 @@ class Miner(multiprocessing.Process):
         b = binascii.unhexlify(blob)
         bin = struct.pack('39B', *bytearray(b[:39]))
         bin += struct.pack('I', nonce)
-        bin += struct.pack('{}B'.format(len(b)-43), *bytearray(b[43:]))
+        bin += struct.pack(f'{len(b) - 43}B', *bytearray(b[43:]))
         return bin
 
 
@@ -110,11 +110,9 @@ class Miner(multiprocessing.Process):
             if cnv > 5:
                 seed_hash = binascii.unhexlify(job.get('seed_hash'))
                 #print('New job with target: {}, RandomX, height: {}'.format(target, height))
-            #else:
-                #print('New job with target: {}, CNv{}, height: {}'.format(target, cnv, height))
             target = struct.unpack('I', binascii.unhexlify(target))[0]
             if target >> 32 == 0:
-                target = int(0xFFFFFFFFFFFFFFFF / int(0xFFFFFFFF / target))
+                target = 0xFFFFFFFFFFFFFFFF // int(0xFFFFFFFF / target)
             nonce = 1
 
             while 1:

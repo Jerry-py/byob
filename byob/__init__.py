@@ -137,6 +137,6 @@ __github__ = 'https://github.com/malwaredllc/byob'
 
 def main():
     for module in __all__:
-        exec("import {}".format(module))
+        exec(f"import {module}")
 
 #main()

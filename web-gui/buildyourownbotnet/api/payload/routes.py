@@ -58,8 +58,11 @@ def payload_generate():
 
 		# add payload to database
 		payload_dao.add_user_payload(current_user.id, os.path.basename(outfile), operating_system, architecture)
-		flash('Successfully generated payload: ' + os.path.basename(outfile), 'success')
+		flash(
+			f'Successfully generated payload: {os.path.basename(outfile)}', 'success'
+		)
+
 	except Exception as e:
 		flash('Error: compilation timed out or failed. Please go to the Discord support server for help.')
-		print("Exception in api.routes.payload.payload_generate: " + str(e))
+		print(f"Exception in api.routes.payload.payload_generate: {str(e)}")
 	return redirect(url_for('main.payloads'))

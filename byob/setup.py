@@ -47,7 +47,7 @@ def main():
     try:
         pip_path = subprocess.check_output('where pip' if os.name == 'nt' else 'which pip', shell=True).strip().rstrip()
     except Exception as e:
-        logger.debug("Error in pip package installer: {}".format(str(e)))
+        logger.debug(f"Error in pip package installer: {str(e)}")
 
     # install pip if missing
     try:
@@ -55,7 +55,7 @@ def main():
     except:
         # intrct: removing this check -- the import pip failure above should make this check unnecessary, and 
         #           it actually becomes a problem if someone runs python 2.7.x and 3.x on the same host.
-        #if not bool('pip_path' in locals() and os.path.exists(pip_path)) and 
+        #if not bool('pip_path' in locals() and os.path.exists(pip_path)) and
         if os.name != "nt":
             try:
                 # NOTE: intrct -- I think this is a bad practice (instituting execution of arbitrary remote code we don't control).
@@ -66,11 +66,19 @@ def main():
                 # intrct: added check for version for proper callout materials, and 
                 # running as subprocess rather than internal due to potential early exits in remote code.
                 if sys.version_info[0] > 2:
-                    subprocess.check_call("""{} -c 'from urllib.request import urlopen; exec(urlopen("https://bootstrap.pypa.io/get-pip.py").read())'""".format(sys.executable), shell=True)
+                    subprocess.check_call(
+                        f"""{sys.executable} -c 'from urllib.request import urlopen; exec(urlopen("https://bootstrap.pypa.io/get-pip.py").read())'""",
+                        shell=True,
+                    )
+
                 else:
-                    subprocess.check_call("""{} -c 'from urllib import urlopen; exec(urlopen("https://bootstrap.pypa.io/get-pip.py").read())'""".format(sys.executable), shell=True)
+                    subprocess.check_call(
+                        f"""{sys.executable} -c 'from urllib import urlopen; exec(urlopen("https://bootstrap.pypa.io/get-pip.py").read())'""",
+                        shell=True,
+                    )
+
             except Exception as e:
-                logger.debug("Error installing pip: {}".format(str(e)))
+                logger.debug(f"Error installing pip: {str(e)}")
 
             # restart
             # intrct: I would like to point out a limitation that this only installs packages for the linked "python"
@@ -89,14 +97,32 @@ def main():
     try:
         print("Installing requirements.txt")
         if os.name != "nt":
-            locals()['pip_install_1'] = subprocess.Popen('sudo --prompt=" Please enter sudo password (to install python dependencies): " {} -m pip install -r {}'.format(sys.executable, requirements), 0, None, subprocess.PIPE, subprocess.PIPE, subprocess.PIPE, shell=True)
+            locals()['pip_install_1'] = subprocess.Popen(
+                f'sudo --prompt=" Please enter sudo password (to install python dependencies): " {sys.executable} -m pip install -r {requirements}',
+                0,
+                None,
+                subprocess.PIPE,
+                subprocess.PIPE,
+                subprocess.PIPE,
+                shell=True,
+            )
+
         else:
-            locals()['pip_install_1'] = subprocess.Popen('{} -m pip install -r {}'.format(sys.executable, requirements), 0, None, subprocess.PIPE, subprocess.PIPE, subprocess.PIPE, shell=True)           
+            locals()['pip_install_1'] = subprocess.Popen(
+                f'{sys.executable} -m pip install -r {requirements}',
+                0,
+                None,
+                subprocess.PIPE,
+                subprocess.PIPE,
+                subprocess.PIPE,
+                shell=True,
+            )
+
         for line in locals()['pip_install_1'].stdout:
             print(line.decode())
             sys.stdout.flush()
     except Exception as e:
-        logger.error("Error installing requirements: {}".format(e))
+        logger.error(f"Error installing requirements: {e}")
 
 if __name__ == '__main__':
     main()

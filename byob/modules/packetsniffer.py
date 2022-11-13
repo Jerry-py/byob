@@ -47,7 +47,7 @@ def _udp_header(data):
         globals()['log'].write('\n================================================')
         return data
     except Exception as e:
-        globals()['log'].write("\nError in {} header: '{}'".format('UDP', str(e)))
+        globals()['log'].write(f"\nError in UDP header: '{str(e)}'")
 
 def _tcp_header(recv_data):
     try:
@@ -84,7 +84,7 @@ def _tcp_header(recv_data):
         globals()['log'].write('\n================================================')
         return recv_data
     except Exception as e:
-        globals()['log'].write("\nError in {} header: '{}'".format('TCP', str(e)))
+        globals()['log'].write(f"\nError in TCP header: '{str(e)}'")
 
 def _ip_header(data):
     try:
@@ -119,12 +119,11 @@ def _ip_header(data):
         globals()['log'].write('\n================================================')
         return data, ipproto
     except Exception as e:
-        globals()['log'].write("\nError in {} header: '{}'".format('IP', str(e)))
+        globals()['log'].write(f"\nError in IP header: '{str(e)}'")
 
 
 def _eth_header(data):
     try:
-        ip_bool = False
         eth_hdr = struct.unpack('!6s6sH', data[:14])
         dst_mac = binascii.hexlify(eth_hdr[0])
         src_mac = binascii.hexlify(eth_hdr[1])
@@ -132,16 +131,27 @@ def _eth_header(data):
         globals()['log'].write('\n================================================')
         globals()['log'].write('\n================== ETH HEADER ==================')
         globals()['log'].write('\n================================================')
-        globals()['log'].write('\n{:>20} ,  {}\t'.format('Target MAC', '{}:{}:{}:{}:{}:{}'.format(dst_mac[0:2],dst_mac[2:4],dst_mac[4:6],dst_mac[6:8],dst_mac[8:10],dst_mac[10:12])))
-        globals()['log'].write('\n{:>20} ,  {}\t'.format('Source MAC', '{}:{}:{}:{}:{}:{}'.format(src_mac[0:2],src_mac[2:4],src_mac[4:6],src_mac[6:8],src_mac[8:10],src_mac[10:12])))
+        globals()['log'].write(
+            '\n{:>20} ,  {}\t'.format(
+                'Target MAC',
+                f'{dst_mac[:2]}:{dst_mac[2:4]}:{dst_mac[4:6]}:{dst_mac[6:8]}:{dst_mac[8:10]}:{dst_mac[10:12]}',
+            )
+        )
+
+        globals()['log'].write(
+            '\n{:>20} ,  {}\t'.format(
+                'Source MAC',
+                f'{src_mac[:2]}:{src_mac[2:4]}:{src_mac[4:6]}:{src_mac[6:8]}:{src_mac[8:10]}:{src_mac[10:12]}',
+            )
+        )
+
         globals()['log'].write('\n{:>20} ,  {}\t\t\t'.format('Protocol', proto))
         globals()['log'].write('\n================================================')
-        if proto == 8:
-            ip_bool = True
+        ip_bool = proto == 8
         data = data[14:]
         return data, ip_bool
     except Exception as e:
-        globals()['log'].write("\nError in {} header: '{}'".format('ETH', str(e)))
+        globals()['log'].write(f"\nError in ETH header: '{str(e)}'")
 
 def _run():
     global flag
