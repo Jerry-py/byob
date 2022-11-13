@@ -61,11 +61,11 @@ def _monitor(keyword):
                 if keyword in row:
                     globals()['log'].write(row)
             except Exception as e1:
-                return "{} error: {}".format(monitor.__name__, str(e1))
+                return f"{monitor.__name__} error: {str(e1)}"
             if globals()['_abort']:
                 break
     except Exception as e2:
-        return "{} error: {}".format(monitor.__name__, str(e2))
+        return f"{monitor.__name__} error: {str(e2)}"
 
 def list(*args, **kwargs):
     """
@@ -81,12 +81,12 @@ def list(*args, **kwargs):
             exe = i.split()[0 if os.name == 'nt' else -1]
             if exe not in output:
                 if len(json.dumps(output)) < 48000:
-                    output.update({pid: exe})
+                    output[pid] = exe
                 else:
                     break
         return json.dumps(output)
     except Exception as e:
-        return "{} error: {}".format(list.__name__, str(e))
+        return f"{list.__name__} error: {str(e)}"
 
 def search(keyword):
     """
@@ -107,12 +107,12 @@ def search(keyword):
             exe = i.split()[0 if os.name == 'nt' else -1]
             if keyword in exe:
                 if len(json.dumps(output)) < 48000:
-                    output.update({pid: exe})
+                    output[pid] = exe
                 else:
                     break
         return json.dumps(output)
     except Exception as e:
-        return "{} error: {}".format(search.__name__, str(e))
+        return f"{search.__name__} error: {str(e)}"
 
 def kill(process_id):
     """
@@ -130,19 +130,29 @@ def kill(process_id):
             exe = i.split()[0 if os.name == 'nt' else -1]
             if str(process_id).isdigit() and int(process_id) == int(pid):
                 try:
-                    _ = os.popen('taskkill /pid %s /f' % pid if os.name == 'nt' else 'kill -9 %s' % pid).read()
-                    output.update({process_id: "killed"})
+                    _ = os.popen(
+                        f'taskkill /pid {pid} /f'
+                        if os.name == 'nt'
+                        else f'kill -9 {pid}'
+                    ).read()
+
+                    output[process_id] = "killed"
                 except:
-                    output.update({process_id: "not found"})
+                    output[process_id] = "not found"
             else:
                 try:
-                    _ = os.popen('taskkill /im %s /f' % exe if os.name == 'nt' else 'kill -9 %s' % exe).read()
-                    output.update({exe: "killed"})
+                    _ = os.popen(
+                        f'taskkill /im {exe} /f'
+                        if os.name == 'nt'
+                        else f'kill -9 {exe}'
+                    ).read()
+
+                    output[exe] = "killed"
                 except Exception as e:
                     return str(e)
             return json.dumps(output)
     except Exception as e:
-        return "{} error: {}".format(kill.__name__, str(e))
+        return f"{kill.__name__} error: {str(e)}"
 
 def monitor(keyword):
     """
@@ -169,6 +179,6 @@ def block(process_name='taskmgr.exe'):
     try:
         code = template_block.substitute(PROCESS=process_name)
         _ = util.powershell(code)
-        return "Process {} blocked".format(process_name)
+        return f"Process {process_name} blocked"
     except Exception as e:
-        return "{} error: {}".format(block.__name__, str(e))
+        return f"{block.__name__} error: {str(e)}"

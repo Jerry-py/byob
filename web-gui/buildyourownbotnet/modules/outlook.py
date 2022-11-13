@@ -81,7 +81,7 @@ def count():
         outlook = win32com.client.Dispatch('Outlook.Application').GetNameSpace('MAPI')
         inbox = outlook.GetDefaultFolder(6)
         result = len(inbox.Items)
-    return "Emails in Outlook inbox: {}".format(result)
+    return f"Emails in Outlook inbox: {result}"
 
 def run():
     """

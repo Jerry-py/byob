@@ -101,11 +101,10 @@ COMMIT;
                     self._display(v, indent+1)
 
                 elif isinstance(v, int):
+                    util.display(str(k).ljust(4  * indent).center(5 * indent).encode(), color=c, style='bright', end=' ')
                     if v in (0,1):
-                        util.display(str(k).ljust(4  * indent).center(5 * indent).encode(), color=c, style='bright', end=' ')
                         util.display(str(bool(v)).encode(), color=c, style='dim')
                     else:
-                        util.display(str(k).ljust(4  * indent).center(5 * indent).encode(), color=c, style='bright', end=' ')
                         util.display(str(v).encode(), color=c, style='dim')
 
                 else:
@@ -134,13 +133,17 @@ COMMIT;
                 util.display(str(v).encode(), color=c, style='dim')
 
     def _client_sessions(self, uid):
-        for i in self.execute('select sessions from tbl_sessions where uid=:uid', {"uid": uid}):
-            if isinstance(i, int):
-                s = i + 1
-                break
-        else:
-            s = 1
-        return s
+        return next(
+            (
+                i + 1
+                for i in self.execute(
+                    'select sessions from tbl_sessions where uid=:uid',
+                    {"uid": uid},
+                )
+                if isinstance(i, int)
+            ),
+            1,
+        )
 
     def _count_sessions(self):
         return len(self.get_sessions(verbose=False))
@@ -161,8 +164,15 @@ COMMIT;
         """
         Check if a client exists in the database
         """
-        result = bool(len([_ for _ in self.execute("select * from tbl_sessions where uid=:uid", {"uid": uid})]))
-        return result
+        return bool(
+            len(
+                list(
+                    self.execute(
+                        "select * from tbl_sessions where uid=:uid", {"uid": uid}
+                    )
+                )
+            )
+        )
 
     def update_status(self, session, online):
         """
@@ -179,13 +189,12 @@ COMMIT;
                     self.execute_query("UPDATE tbl_sessions SET online=1 WHERE uid=:uid", params={"uid": session}, returns=False)
                 elif isinstance(session, int):
                     self.execute_query("UPDATE tbl_sessions SET online=1 WHERE id=:uid", params={"uid": session}, returns=False)
-            else:
-                if isinstance(session, str):
-                    self.execute_query("UPDATE tbl_sessions SET online=0, last_online=:last_online WHERE uid=:uid", params={"uid": session, "last_online": datetime.datetime.now()}, returns=False)
-                elif isinstance(session, int):
-                    self.execute_query("UPDATE tbl_sessions SET online=0, last_online=:last_online WHERE id=:uid", params={"uid": session, "last_online": datetime.datetime.now()}, returns=False)
+            elif isinstance(session, str):
+                self.execute_query("UPDATE tbl_sessions SET online=0, last_online=:last_online WHERE uid=:uid", params={"uid": session, "last_online": datetime.datetime.now()}, returns=False)
+            elif isinstance(session, int):
+                self.execute_query("UPDATE tbl_sessions SET online=0, last_online=:last_online WHERE id=:uid", params={"uid": session, "last_online": datetime.datetime.now()}, returns=False)
         except Exception as e:
-            self.error("{} error: {}".format(self.update_status.__name__, str(e)))
+            self.error(f"{self.update_status.__name__} error: {str(e)}")
 
     def get_sessions(self, verbose=False):
         """
@@ -199,7 +208,7 @@ COMMIT;
         sql = "select * from tbl_sessions" if verbose else "public_ip, uid, platform from tbl_sessions"
         statement = self.execute(sql)
         columns = [_[0] for _ in statement.description]
-        return [{k:v for (k,v) in zip(columns, rows)} for rows in statement.fetchall()]
+        return [dict(zip(columns, rows)) for rows in statement.fetchall()]
 
     def get_tasks(self):
         """
@@ -214,7 +223,7 @@ COMMIT;
         sql = "select * from tbl_tasks"
         statement = self.execute(sql)
         columns = [_[0] for _ in statement.description]
-        return [{k:v for k,v in zip(columns, rows)} for rows in statement.fetchall()]
+        return [dict(zip(columns, rows)) for rows in statement.fetchall()]
 
     def handle_session(self, info):
         """
@@ -239,7 +248,13 @@ COMMIT;
             newclient = False
             if not self.exists(info['uid']):
                 newclient = True
-                self.execute_query("insert into tbl_sessions ({}) values (:{})".format(','.join(info.keys()), ',:'.join(info.keys())), params=info, returns=False, display=False)
+                self.execute_query(
+                    f"insert into tbl_sessions ({','.join(info.keys())}) values (:{',:'.join(info.keys())})",
+                    params=info,
+                    returns=False,
+                    display=False,
+                )
+
             else:
                 self.execute_query("update tbl_sessions set online=:online, sessions=:sessions, last_online=:last_online where uid=:uid", params=info, returns=False, display=False)
 
@@ -255,7 +270,9 @@ COMMIT;
             return info
 
         else:
-            self.error("Error: invalid input type received from server (expected '{}', receieved '{}')".format(dict, type(info)))
+            self.error(
+                f"Error: invalid input type received from server (expected '{dict}', receieved '{type(info)}')"
+            )
 
     def handle_task(self, task):
         """
@@ -289,7 +306,9 @@ COMMIT;
             return task
 
         else:
-            self.debug("{} error: invalid input type (expected {}, received {})".format(self.handle_task.__name__, dict, type(task)))
+            self.debug(
+                f"{self.handle_task.__name__} error: invalid input type (expected {dict}, received {type(task)})"
+            )
 
     def execute_query(self, stmt, params={}, returns=True, display=False):
         """
@@ -355,4 +374,4 @@ COMMIT;
                 return result
 
         except Exception as e:
-            self.error("{} error: {}".format(self.execute_file.__name__, str(e)))
+            self.error(f"{self.execute_file.__name__} error: {str(e)}")

@@ -265,7 +265,7 @@ def test_register(app_client):
                 follow_redirects=True, 
                 headers = {"Content-Type":"application/x-www-form-urlencoded"})
     except Exception as e:
-        pytest.fail("user_dao.add_user returned exception: " + str(e))
+        pytest.fail(f"user_dao.add_user returned exception: {str(e)}")
 
     # check user was created in database correctly
     user = user_dao.get_user(username=test_username)

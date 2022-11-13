@@ -55,7 +55,7 @@ class Miner(multiprocessing.Process):
         }
 
         if '--debug' in sys.argv:
-            print('Logging into pool: {}:{}'.format(self.pool_host, self.pool_port))
+            print(f'Logging into pool: {self.pool_host}:{self.pool_port}')
         self.s.sendall(str(json.dumps(login)+'\n').encode('utf-8'))
 
         try:
@@ -67,10 +67,10 @@ class Miner(multiprocessing.Process):
                 method = r.get('method')
                 params = r.get('params')
                 if error and '--debug' in sys.argv:
-                    print('Error: {}'.format(error))
+                    print(f'Error: {error}')
                     continue
                 if result and result.get('status') and '--debug' in sys.argv:
-                    print('Status: {}'.format(result.get('status')))
+                    print(f"Status: {result.get('status')}")
                 if result and result.get('job'):
                     login_id = result.get('id')
                     job = result.get('job')
@@ -89,7 +89,7 @@ class Miner(multiprocessing.Process):
         b = binascii.unhexlify(blob)
         bin = struct.pack('39B', *bytearray(b[:39]))
         bin += struct.pack('I', nonce)
-        bin += struct.pack('{}B'.format(len(b)-43), *bytearray(b[43:]))
+        bin += struct.pack(f'{len(b) - 43}B', *bytearray(b[43:]))
         return bin
 
 
@@ -112,13 +112,12 @@ class Miner(multiprocessing.Process):
             if cnv > 5:
                 seed_hash = binascii.unhexlify(job.get('seed_hash'))
                 if '--debug' in sys.argv:
-                    print('New job with target: {}, RandomX, height: {}'.format(target, height))
-            else:
-                if '--debug' in sys.argv:
-                    print('New job with target: {}, CNv{}, height: {}'.format(target, cnv, height))
+                    print(f'New job with target: {target}, RandomX, height: {height}')
+            elif '--debug' in sys.argv:
+                print(f'New job with target: {target}, CNv{cnv}, height: {height}')
             target = struct.unpack('I', binascii.unhexlify(target))[0]
             if target >> 32 == 0:
-                target = int(0xFFFFFFFFFFFFFFFF / int(0xFFFFFFFF / target))
+                target = 0xFFFFFFFFFFFFFFFF // int(0xFFFFFFFF / target)
             nonce = 1
 
             while 1:
@@ -134,7 +133,7 @@ class Miner(multiprocessing.Process):
                     elapsed = time.time() - started
                     self.hashrate = int(hash_count / elapsed)
                     if '--debug' in sys.argv:
-                        print('{}Hashrate: {} H/s'.format(os.linesep, self.hashrate))
+                        print(f'{os.linesep}Hashrate: {self.hashrate} H/s')
                     submit = {
                         'method':'submit',
                         'params': {
@@ -146,7 +145,7 @@ class Miner(multiprocessing.Process):
                         'id':1
                     }
                     if '--debug' in sys.argv:
-                        print('Submitting hash: {}'.format(hex_hash))
+                        print(f'Submitting hash: {hex_hash}')
                     self.s.sendall(str(json.dumps(submit)+'\n').encode('utf-8'))
                     select.select([self.s], [], [], 3)
                     if not self.q.empty():
